@@ -1,0 +1,96 @@
+---
+# Stress payload: triple-booked morning, three all-day events on one day,
+# 12-hour clock, no scroll_time (so the window is derived from the events),
+# and titles long enough to test truncation.
+#
+#   uv run --with python-liquid --with pyyaml --with python-dateutil \
+#       tools/render.py full sample/dense.yml
+
+custom_fields:
+  days: "7"
+  week_start: "rolling"
+  hour_from: ""
+  hour_to: ""
+
+variables:
+  trmnl:
+    user:
+      utc_offset: 3600
+
+  google_calendar_12345:
+    today_in_tz: "2026-08-24"
+    event_layout: week
+    first_day: 1
+    time_format: "am/pm"
+    include_description: true
+    events:
+      - summary: "Regulated data platform - steering committee and quarterly review"
+        description: "Agenda circulated Friday. Bring the risk register and the migration runbook."
+        all_day: false
+        start_full: "2026-08-24T07:30:00.000+01:00"
+        end_full: "2026-08-24T11:00:00.000+01:00"
+        start: "7:30 AM"
+        end: "11:00 AM"
+      - summary: "Triage"
+        start_full: "2026-08-24T08:00:00.000+01:00"
+        end_full: "2026-08-24T08:30:00.000+01:00"
+        start: "8:00 AM"
+        end: "8:30 AM"
+      - summary: "Interview panel"
+        start_full: "2026-08-24T08:15:00.000+01:00"
+        end_full: "2026-08-24T09:15:00.000+01:00"
+        start: "8:15 AM"
+        end: "9:15 AM"
+      - summary: "Fourth overlap, should be capped into lane three"
+        start_full: "2026-08-24T08:20:00.000+01:00"
+        end_full: "2026-08-24T09:00:00.000+01:00"
+        start: "8:20 AM"
+        end: "9:00 AM"
+      - summary: "Data quality clinic"
+        start_full: "2026-08-24T11:15:00.000+01:00"
+        end_full: "2026-08-24T12:00:00.000+01:00"
+        start: "11:15 AM"
+        end: "12:00 PM"
+      - summary: "Late finish - runs past midnight"
+        start_full: "2026-08-24T22:00:00.000+01:00"
+        end_full: "2026-08-25T01:00:00.000+01:00"
+        start: "10:00 PM"
+        end: "1:00 AM"
+      - summary: "Bank holiday"
+        all_day: true
+        start_full: "2026-08-26"
+        end_full: "2026-08-27"
+      - summary: "Second all-day on the same date"
+        all_day: true
+        start_full: "2026-08-26"
+        end_full: "2026-08-27"
+      - summary: "Third all-day, should collapse into plus-one-more"
+        all_day: true
+        start_full: "2026-08-26"
+        end_full: "2026-08-27"
+      - summary: "Early bird"
+        start_full: "2026-08-27T06:00:00.000+01:00"
+        end_full: "2026-08-27T06:45:00.000+01:00"
+        start: "6:00 AM"
+        end: "6:45 AM"
+
+  weather_67890:
+    temperature: 8.6
+    feels_like: 4.1
+    humidity: 88
+    conditions: "Sleet showers"
+    weather_image: "wi-sleet"
+    today_weather_image: "wi-day-sleet"
+    tomorrow_weather_image: "wi-day-sunny"
+    forecast:
+      today:
+        conditions: "Sleet"
+        uv_index: 1
+        mintemp: 2.4
+        maxtemp: 9.1
+      tomorrow:
+        conditions: "Sunny"
+        uv_index: 4
+        mintemp: -1.2
+        maxtemp: 7.8
+        day_override: "Tue"

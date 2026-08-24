@@ -1,0 +1,55 @@
+---
+name: Week and Weather
+description: Rolling week grid with weather
+strategy: plugin_merge
+refresh_interval: 15
+no_screen_padding: 'yes'
+dark_mode: 'no'
+framework_version: '3.2'
+
+custom_fields:
+  - keyname: calendar_source
+    field_type: plugin_instance_select
+    name: Calendar
+    plugin_keyname: google_calendar
+    description: Which calendar instance to read events from
+    help_text: Only plugins currently on a playlist or mashup appear here. Hidden is fine.
+
+  - keyname: weather_source
+    field_type: plugin_instance_select
+    name: Weather
+    plugin_keyname: weather
+    description: Which weather instance to read conditions from
+    help_text: Only plugins currently on a playlist or mashup appear here. Hidden is fine.
+
+  - keyname: days
+    field_type: select
+    name: Days shown
+    description: Number of day columns
+    options:
+      - '7'
+      - '5'
+      - '4'
+      - '3'
+    default: '7'
+
+  - keyname: week_start
+    field_type: select
+    name: First column
+    description: Roll forward from today, or pin to the start of the week
+    options:
+      - rolling
+      - week
+    default: rolling
+
+  - keyname: hour_from
+    field_type: number
+    name: First hour
+    description: Leave blank to follow the calendar plugin's own scroll time
+    help_text: 0-23
+
+  - keyname: hour_to
+    field_type: number
+    name: Last hour
+    description: Leave blank to follow the calendar plugin's own scroll time
+    help_text: 1-24

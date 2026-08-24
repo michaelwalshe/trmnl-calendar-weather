@@ -1,0 +1,137 @@
+{%- comment -%}
+  WEEK + WEATHER - half vertical (400x480). Vertical agenda for the rolling week
+  days under a weather line.
+{%- endcomment -%}
+
+{%- assign cal = calendar_source -%}
+{%- unless cal -%}{%- assign cal = google_calendar_12345 -%}{%- endunless -%}
+{%- assign wx = weather_source -%}
+{%- unless wx -%}{%- assign wx = weather_67890 -%}{%- endunless -%}
+
+{%- assign day_span = 7 -%}
+{%- assign row_cap = 32 -%}
+
+{%- assign events = "" | split: "," -%}
+{%- if cal.events -%}
+  {%- assign probe = cal.events | first -%}
+  {%- if probe.summary -%}
+    {%- assign events = cal.events -%}
+  {%- else -%}
+    {%- for grp in cal.events -%}{%- assign events = events | concat: grp[1] -%}{%- endfor -%}
+  {%- endif -%}
+{%- endif -%}
+{%- assign events = events | sort: "start_full" -%}
+
+{%- assign tz_off = 0 -%}
+{%- if trmnl.user.utc_offset and trmnl.user.utc_offset != "" -%}{%- assign tz_off = trmnl.user.utc_offset | plus: 0 -%}{%- endif -%}
+{%- assign now_utc = "now" | date: "%s" | plus: 0 -%}
+{%- if trmnl.system.timestamp_utc and trmnl.system.timestamp_utc != "" -%}{%- assign now_utc = trmnl.system.timestamp_utc | plus: 0 -%}{%- endif -%}
+{%- assign today = now_utc | plus: tz_off | date: "%Y-%m-%d" -%}
+{%- if cal.today_in_tz and cal.today_in_tz != "" -%}{%- assign today = cal.today_in_tz -%}{%- endif -%}
+{%- assign base_noon = today | date: "%s" | plus: 43200 -%}
+
+<style>
+  .view, .layout { padding: 0 !important; }
+  .layout { display: flex !important; flex-direction: column; height: 100%; }
+  .layout > .cwm { flex: 1 1 auto; min-height: 0; }
+
+  .cwm {
+    --ink: var(--black, #000);
+    --paper: var(--white, #fff);
+    display: flex;
+    flex-direction: column;
+    height: 100%;
+    overflow: hidden;
+    color: var(--ink);
+    background: var(--paper);
+  }
+  .cwm__wx {
+    flex: 0 0 34px;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    padding: 0 8px;
+    border-bottom: 2px solid var(--ink);
+    overflow: hidden;
+  }
+  .cwm__wx img { width: 24px; height: 24px; }
+  .cwm__wx span { white-space: nowrap; }
+  .cwm__pad { flex: 1 1 auto; }
+
+  .cwm__list { flex: 1 1 auto; min-height: 0; overflow: hidden; padding: 0 8px; }
+  .cwm__dh {
+    display: block;
+    margin: 3px 0 2px 0;
+    padding: 0 3px;
+    border-bottom: 1px solid var(--ink);
+  }
+  .cwm__dh--today { background: var(--ink); color: var(--paper); }
+  .cwm__row { display: flex; gap: 6px; overflow: hidden; }
+  .cwm__t { flex: 0 0 76px; white-space: nowrap; }
+  .cwm__s { overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
+  .cwm__allday .cwm__s { background: var(--ink); color: var(--paper); padding: 0 3px; }
+</style>
+
+<div class="cwm">
+  <div class="cwm__wx">
+    {%- if wx -%}
+      {%- assign icon_now = wx.weather_image -%}
+      {%- unless icon_now contains "http" -%}
+        {%- assign icon_now = icon_now | prepend: "https://trmnl.com/images/plugins/weather/" | append: ".svg" -%}
+      {%- endunless -%}
+      <img class="image image--adaptive" src="{{ icon_now }}" alt="" />
+      <span class="text--base">{{ wx.temperature | round }}&deg;</span>
+      <span class="text--small">{{ wx.conditions }}</span>
+      <div class="cwm__pad"></div>
+      <span class="text--small">{{ wx.forecast.today.maxtemp | round }}&deg; / {{ wx.forecast.today.mintemp | round }}&deg;</span>
+    {%- else -%}
+      <span class="text--small">No weather source selected</span>
+      <div class="cwm__pad"></div>
+    {%- endif -%}
+  </div>
+
+  <div class="cwm__list">
+    {%- assign rows = 0 -%}
+    {%- for n in (1..day_span) -%}
+      {%- assign off = n | minus: 1 | times: 86400 -%}
+      {%- assign day_noon = base_noon | plus: off -%}
+      {%- assign day_key = day_noon | date: "%Y-%m-%d" -%}
+      {%- assign head_room = row_cap | minus: 2 -%}
+      {%- if rows < head_room -%}
+        <span class="cwm__dh text--small{% if day_key == today %} cwm__dh--today{% endif %}">{{ day_noon | date: "%a" }} {{ day_noon | date: "%d" | plus: 0 }} {{ day_noon | date: "%b" }}</span>
+        {%- assign rows = rows | plus: 1 -%}
+        {%- assign shown = 0 -%}
+        {%- for e in events -%}
+          {%- if e.all_day -%}
+            {%- assign s_ep = e.start_full | date: "%Y-%m-%d" | date: "%s" | plus: 0 -%}
+            {%- assign x_ep = e.end_full | date: "%Y-%m-%d" | date: "%s" | plus: 0 -%}
+            {%- if x_ep <= s_ep -%}{%- assign x_ep = s_ep | plus: 86400 -%}{%- endif -%}
+            {%- assign hit = false -%}
+            {%- if day_noon > s_ep and day_noon < x_ep -%}{%- assign hit = true -%}{%- endif -%}
+          {%- else -%}
+            {%- assign sd = e.start_full | date: "%Y-%m-%d" -%}
+            {%- assign hit = false -%}
+            {%- if sd == day_key -%}{%- assign hit = true -%}{%- endif -%}
+          {%- endif -%}
+          {%- if hit and rows < row_cap -%}
+            <div class="cwm__row{% if e.all_day %} cwm__allday{% endif %}">
+              {%- unless e.all_day -%}
+                <span class="cwm__t text--small">
+                  {%- if e.start and e.start != "" -%}{{ e.start }}{%- else -%}{{ e.start_full | date: "%H:%M" }}{%- endif -%}
+                  {%- if e.end and e.end != "" %}-{{ e.end }}{% endif -%}
+                </span>
+              {%- endunless -%}
+              <span class="cwm__s text--small">{{ e.summary }}</span>
+            </div>
+            {%- assign rows = rows | plus: 1 -%}
+            {%- assign shown = shown | plus: 1 -%}
+          {%- endif -%}
+        {%- endfor -%}
+        {%- if shown == 0 and rows < row_cap -%}
+          <div class="cwm__row"><span class="cwm__s text--small">Clear</span></div>
+          {%- assign rows = rows | plus: 1 -%}
+        {%- endif -%}
+      {%- endif -%}
+    {%- endfor -%}
+  </div>
+</div>
