@@ -277,7 +277,12 @@ URLs, and either may be colour art; both are reduced to a slug and mapped onto
 TRMNL's mono `wi-*` set, which is what survives a 2-bit panel. Unrecognised
 values fall back to `wi-na`.
 
-**Hourly**: `current_temp`, `temperatures` (array of arrays),
+**Hourly**: the recipe is a *private* plugin, and a private plugin's merge
+variable exposes the plugin **definition** (markup blob ids, custom field
+values), not its data — the recipe's own output is one level down under
+`merge_variables`, and may nest again under `data`. The template unwraps both
+and only adopts a candidate that actually yields temperatures. Keys read:
+`current_temp`, `temperatures` (array of arrays),
 `timestamps_formatted` and `weather_icons` (which drives the pill fills — absent,
 every pill takes the partly-cloudy level), read from the node directly or from
 its `data` child.

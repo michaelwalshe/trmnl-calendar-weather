@@ -42,9 +42,24 @@
 {%- assign wx = weather_source -%}
 {%- unless wx.temperature or wx.forecast -%}{%- assign wx = weather_451639 -%}{%- endunless -%}
 
+{%- comment -%}
+  A private plugin's merge variable exposes the plugin *definition* - markup blob
+  ids, custom field values - not its data. The recipe's own output sits one level
+  down under .merge_variables, and may nest again under .data. Unwrap both.
+
+  Each candidate is unwrapped and only adopted if it actually yields
+  temperatures, so a working source is never overwritten by a missing one.
+{%- endcomment -%}
 {%- assign hourly = hourly_source -%}
-{%- unless hourly.temperatures or hourly.data -%}{%- assign hourly = private_plugin_454878 -%}{%- endunless -%}
+{%- if hourly.merge_variables -%}{%- assign hourly = hourly.merge_variables -%}{%- endif -%}
 {%- if hourly.data -%}{%- assign hourly = hourly.data -%}{%- endif -%}
+
+{%- unless hourly.temperatures -%}
+  {%- assign h_alt = private_plugin_454878 -%}
+  {%- if h_alt.merge_variables -%}{%- assign h_alt = h_alt.merge_variables -%}{%- endif -%}
+  {%- if h_alt.data -%}{%- assign h_alt = h_alt.data -%}{%- endif -%}
+  {%- if h_alt.temperatures -%}{%- assign hourly = h_alt -%}{%- endif -%}
+{%- endunless -%}
 
 {%- comment -%} ---------- settings (custom fields, all optional) ---------- {%- endcomment -%}
 {%- assign day_count = 7 -%}
