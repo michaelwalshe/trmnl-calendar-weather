@@ -66,25 +66,29 @@ Preview renders, from the sample payload in `.trmnlp.yml`:
 - All-day events in a band under the headings, one outlined chip per day
   covered, overflowing to `+N more`. Inversion is reserved for today and for
   anything in progress, so it keeps meaning something.
-- A now-line with a marker dot across today's column.
+- A now-line with a marker dot across today's column, dashed ink-on-paper so it
+  stays legible where it crosses an in-progress event, which is filled with ink —
+  a solid line vanished there, exactly where it mattered most.
 - Weather strip on the same column track as the grid: current conditions sit
   over today's column, tomorrow's high/low over tomorrow's column, and the
   hourly graph fills the columns after that. Without an hourly source the strip
   shrinks and the grid takes the space back.
-- The graph is a row of **rounded pills: height is temperature, fill is how
-  sunny that hour is**, read from the hourly source's own per-hour icon —
+- The graph is a row of **rounded pills: height is temperature, fill darkens as
+  the sun goes down** — read from the weather source's own sunrise and sunset,
+  falling back to 06:00/19:00 —
 
   | Fill | Hour |
   |---|---|
-  | empty | clear |
-  | light grey | partly cloudy |
-  | dark grey | overcast or fog |
-  | solid | rain, snow, sleet or storms |
+  | empty | full daylight |
+  | light grey | within an hour of sunrise or sunset |
+  | dark grey | twilight, up to two hours past |
+  | solid | night |
 
   Those are the four levels a 2-bit panel renders flat, with no dither texture to
-  muddy them at pill size; on 1-bit the middle two fall back to tiles. The
-  nearest hour gets a ring around its pill rather than a different fill, so fill
-  stays a pure weather signal.
+  muddy them at pill size; on 1-bit the middle two fall back to tiles. The ramp
+  is monotonic through the evening, so the strip reads as dusk falling rather
+  than as an arbitrary pattern. The nearest hour gets a ring around its pill
+  rather than a different fill, so fill stays a pure daylight signal.
 - Locations appear inside long events when they are a real place rather than a
   Teams or Zoom link.
 

@@ -189,6 +189,26 @@
   {%- if d < near_d -%}{%- assign near_d = d -%}{%- assign near_i = forloop.index0 -%}{%- endif -%}
 {%- endfor -%}
 
+{%- comment -%} ---------- daylight, for the pill fills ----------
+  Parsed from the weather source; falls back to 06:00/19:00 when absent.
+{%- endcomment -%}
+{%- assign sun_up = 360 -%}
+{%- assign sun_dn = 1140 -%}
+{%- assign sr_txt = wx.forecast.right_now.sunrise -%}
+{%- if sr_txt and sr_txt != "" and sr_txt contains ":" -%}
+  {%- assign sr_p = sr_txt | split: ":" -%}
+  {%- assign sr_h = sr_p[0] | plus: 0 -%}
+  {%- assign sr_m = sr_p[1] | plus: 0 -%}
+  {%- assign sun_up = sr_h | times: 60 | plus: sr_m -%}
+{%- endif -%}
+{%- assign ss_txt = wx.forecast.right_now.sunset -%}
+{%- if ss_txt and ss_txt != "" and ss_txt contains ":" -%}
+  {%- assign ss_p = ss_txt | split: ":" -%}
+  {%- assign ss_h = ss_p[0] | plus: 0 -%}
+  {%- assign ss_m = ss_p[1] | plus: 0 -%}
+  {%- assign sun_dn = ss_h | times: 60 | plus: ss_m -%}
+{%- endif -%}
+
 {%- comment -%} without the graph the strip shrinks and the grid takes the space {%- endcomment -%}
 {%- assign has_graph = false -%}
 {%- if temps and temps != empty and c_graph <= last_col -%}{%- assign has_graph = true -%}{%- endif -%}
@@ -649,15 +669,25 @@
   }
   .cw__more { display: block; height: 18px; white-space: nowrap; }
 
-  .cw__now { position: absolute; left: -1px; right: 0; height: 0; border-top: 2px solid var(--ink); }
+  /* Dashed ink-on-paper, so it stays visible over an in-progress block, which is
+     filled with ink - a solid ink line simply vanished there. */
+  .cw__now {
+    position: absolute;
+    left: -1px;
+    right: 0;
+    height: 2px;
+    background-image: repeating-linear-gradient(to right,
+      var(--ink) 0 5px, var(--paper) 5px 10px);
+  }
   .cw__now::before {
     content: "";
     position: absolute;
-    top: -4px;
+    top: -3px;
     left: 0;
-    width: 7px;
-    height: 7px;
+    width: 8px;
+    height: 8px;
     background: var(--ink);
+    outline: 1px solid var(--paper);
   }
 
   /* counts for what is not drawn: above the window, below it, or too deeply
@@ -731,21 +761,23 @@
           {%- unless v -%}{%- assign v = t -%}{%- endunless -%}
           {%- assign vr = v | round -%}
           {%- assign bar = vr | minus: t_min | times: 66.0 | divided_by: t_span | plus: 34 -%}
-          {%- comment -%} sunshine level from that hour's own icon, 1 clear to 4 wet {%- endcomment -%}
-          {%- assign wi = hourly.weather_icons[forloop.index0] -%}
-          {%- assign wislug = "" -%}
-          {%- if wi and wi != "" -%}
-            {%- assign wislug = wi | split: "/" | last | split: "." | first | downcase -%}
-          {%- endif -%}
-          {%- assign sun = 2 -%}
-          {%- if wislug contains "rain" or wislug contains "shower" or wislug contains "storm" or wislug contains "thunder" or wislug contains "snow" or wislug contains "sleet" or wislug contains "hail" or wislug contains "drizzle" or wislug contains "sprinkle" -%}
-            {%- assign sun = 4 -%}
-          {%- elsif wislug contains "partly" or wislug contains "day-cloudy" or wislug contains "alt-cloudy" -%}
-            {%- assign sun = 2 -%}
-          {%- elsif wislug contains "cloud" or wislug contains "overcast" or wislug contains "fog" or wislug contains "haze" -%}
-            {%- assign sun = 3 -%}
-          {%- elsif wislug contains "sunny" or wislug contains "clear" -%}
-            {%- assign sun = 1 -%}
+          {%- comment -%} fill darkens as the sun goes down: day, sunrise/sunset,
+            twilight, night. Read the hour off the pre-formatted label. {%- endcomment -%}
+          {%- assign bt = hourly.timestamps_formatted[forloop.index0] | upcase -%}
+          {%- assign bh = bt | split: ":" | first | split: " " | first | plus: 0 -%}
+          {%- if bt contains "PM" and bh < 12 -%}{%- assign bh = bh | plus: 12 -%}{%- endif -%}
+          {%- if bt contains "AM" and bh == 12 -%}{%- assign bh = 0 -%}{%- endif -%}
+          {%- assign bm = bh | times: 60 -%}
+          {%- assign dawn_a = sun_up | minus: 120 -%}
+          {%- assign dawn_b = sun_up | minus: 30 -%}
+          {%- assign day_a = sun_up | plus: 60 -%}
+          {%- assign day_b = sun_dn | minus: 60 -%}
+          {%- assign dusk_a = sun_dn | plus: 30 -%}
+          {%- assign dusk_b = sun_dn | plus: 120 -%}
+          {%- assign sun = 4 -%}
+          {%- if bm >= day_a and bm <= day_b -%}{%- assign sun = 1 -%}
+          {%- elsif bm >= dawn_b and bm <= dusk_a -%}{%- assign sun = 2 -%}
+          {%- elsif bm >= dawn_a and bm <= dusk_b -%}{%- assign sun = 3 -%}
           {%- endif -%}
           <div class="cw__bar-col">
             <span class="text--small">{{ vr }}&deg;</span>
