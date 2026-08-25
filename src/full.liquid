@@ -26,11 +26,24 @@
   Pick the three sources in this plugin's settings. Each must also sit on a
   playlist (hidden is fine) or its data never refreshes.
 {%- endcomment -%}
-{%- assign cal = calendar_source -%}
-{%- assign wx = weather_source -%}
+{%- comment -%}
+  Prefer the form field: a plugin_instance_select keyname is meant to resolve to
+  the selected instance's parsed data. Fall back to the merge variable when it
+  does not, which is the case on a plugin whose sources have never been picked.
+  Test for the data itself, not mere presence - the field can hold an id string,
+  which is truthy but has no .events, and would render an empty grid silently.
 
-{%- comment -%} the hourly recipe may nest its payload under .data {%- endcomment -%}
+  The merge-variable names below pin this to one account. Delete them once the
+  form fields are confirmed populated; they exist so the plugin renders at all.
+{%- endcomment -%}
+{%- assign cal = calendar_source -%}
+{%- unless cal.events -%}{%- assign cal = google_calendar_451642 -%}{%- endunless -%}
+
+{%- assign wx = weather_source -%}
+{%- unless wx.temperature or wx.forecast -%}{%- assign wx = weather_451639 -%}{%- endunless -%}
+
 {%- assign hourly = hourly_source -%}
+{%- unless hourly.temperatures or hourly.data -%}{%- assign hourly = private_plugin_454878 -%}{%- endunless -%}
 {%- if hourly.data -%}{%- assign hourly = hourly.data -%}{%- endif -%}
 
 {%- comment -%} ---------- settings (custom fields, all optional) ---------- {%- endcomment -%}

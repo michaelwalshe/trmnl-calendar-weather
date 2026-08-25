@@ -5,8 +5,12 @@
 
 {%- comment -%} a plugin_instance_select keyname resolves to the selected
   instance's parsed data, so no plugin ids belong in here {%- endcomment -%}
+{%- comment -%} form field first, merge variable as a fallback until the fields
+  are confirmed populated - see the note in full.liquid {%- endcomment -%}
 {%- assign cal = calendar_source -%}
+{%- unless cal.events -%}{%- assign cal = google_calendar_451642 -%}{%- endunless -%}
 {%- assign wx = weather_source -%}
+{%- unless wx.temperature or wx.forecast -%}{%- assign wx = weather_451639 -%}{%- endunless -%}
 
 {%- assign day_span = 2 -%}
 {%- assign row_cap = 9 -%}
