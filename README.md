@@ -108,10 +108,17 @@ laid out for the 800×480 original, so they leave dead space on a 600px panel.
 6. Tick **Remove screen padding**; the grid is designed to bleed to the edges.
 7. Save, pick your sources in the plugin's settings, then **Force Refresh**.
 
-If a source is not in the dropdown — the Weather Glance recipe may not be, since
-recipes are private plugins — edit the fallback merge variables at the top of the
-template instead. Their names are `<plugin_keyname>_<plugin_setting_id>`, listed
-in the Merge Variables dropdown of the markup editor.
+The merge variables at the top of each template are the base; the form fields
+override them. Their names are `<plugin_keyname>_<plugin_setting_id>`, listed in
+the Merge Variables dropdown of the markup editor — **a recipe is a private
+plugin**, so Weather Glance appears as `private_plugin_<id>`, not
+`weather_glance_<id>`. The values committed here point at this account's
+instances; change them for another account.
+
+The form field is only preferred when it carries real data (`calendar_source.events`
+rather than just `calendar_source`), because `plugin_instance_select` can hand
+back an id string. That is truthy but has no `.events`, so testing presence alone
+renders an empty grid with nothing to explain why.
 
 Refresh cadence follows your playlist schedule: the sources refresh on their own
 interval and the new values map into this plugin.

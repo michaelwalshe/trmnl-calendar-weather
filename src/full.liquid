@@ -18,14 +18,26 @@
 ================================================================================
 {%- endcomment -%}
 
-{%- assign cal = calendar_source -%}
-{%- unless cal -%}{%- assign cal = google_calendar_12345 -%}{%- endunless -%}
+{%- comment -%} ---------- resolve the three sources ----------
+  The merge variable is the base; the form field overrides it. Test the field for
+  real data rather than mere presence: plugin_instance_select can hand back an id
+  string instead of the parsed node, which is truthy but has no .events, and
+  would render an empty grid with no hint as to why.
 
-{%- assign wx = weather_source -%}
-{%- unless wx -%}{%- assign wx = weather_67890 -%}{%- endunless -%}
+  Merge variable names are <plugin_keyname>_<plugin_setting_id> and are listed in
+  the Merge Variables dropdown of the markup editor. Note that a recipe is a
+  private plugin, so Weather Glance appears as private_plugin_<id>.
+{%- endcomment -%}
+{%- assign cal = google_calendar_451642 -%}
+{%- if calendar_source.events -%}{%- assign cal = calendar_source -%}{%- endif -%}
 
-{%- assign hourly = hourly_source -%}
-{%- unless hourly -%}{%- assign hourly = weather_glance_67891 -%}{%- endunless -%}
+{%- assign wx = weather_451639 -%}
+{%- if weather_source.temperature or weather_source.forecast or weather_source.conditions -%}
+  {%- assign wx = weather_source -%}
+{%- endif -%}
+
+{%- assign hourly = private_plugin_454878 -%}
+{%- if hourly_source.temperatures or hourly_source.data -%}{%- assign hourly = hourly_source -%}{%- endif -%}
 {%- if hourly.data -%}{%- assign hourly = hourly.data -%}{%- endif -%}
 
 {%- comment -%} ---------- settings (custom fields, all optional) ---------- {%- endcomment -%}
