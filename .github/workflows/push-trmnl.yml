@@ -46,6 +46,17 @@ jobs:
       - run: gem install trmnl_preview -v '>= 0.11'
       - run: trmnlp version
       - run: trmnlp lint
+      # Mirrors the spec in usetrmnl/trmnl-liquid-components: an author's plugin
+      # id means nothing on an installer's account, so a fork would resolve the
+      # alias and render blank. Sources must come from the field keyname.
+      - name: No hard-coded plugin ids
+        run: |
+          if grep -rnE '[a-z_]+_[0-9]{4,}' src/*.liquid; then
+            echo "::error::Templates reference a plugin id. Use the plugin_instance_select"
+            echo "::error::keyname instead - an id pins the plugin to one account."
+            exit 1
+          fi
+          echo "No plugin ids in the templates."
 
   push:
     needs: lint

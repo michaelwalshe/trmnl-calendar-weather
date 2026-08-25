@@ -5,12 +5,11 @@
 
 {%- comment -%} a plugin_instance_select keyname resolves to the selected
   instance's parsed data, so no plugin ids belong in here {%- endcomment -%}
-{%- comment -%} form field first, merge variable as a fallback until the fields
-  are confirmed populated - see the note in full.liquid {%- endcomment -%}
-{%- assign cal = calendar_source -%}
-{%- unless cal.events -%}{%- assign cal = google_calendar_451642 -%}{%- endunless -%}
-{%- assign wx = weather_source -%}
-{%- unless wx.temperature or wx.forecast -%}{%- assign wx = weather_451639 -%}{%- endunless -%}
+{%- comment -%} the plugin_instance_select keyname is the data; a private plugin
+  or webhook source nests it under merge_variables. Never reference a plugin id -
+  a fork would resolve the alias and render blank. {%- endcomment -%}
+{%- assign cal = calendar_source.merge_variables | default: calendar_source -%}
+{%- assign wx = weather_source.merge_variables | default: weather_source -%}
 
 {%- assign events = cal.events | sort: "start_full" -%}
 

@@ -93,6 +93,29 @@ compact agendas with a one-line weather header. They do not carry the calendar
 tones. They share the full layout's weather-icon mapping but are otherwise still
 laid out for the 800×480 original, so they leave dead space on a 600px panel.
 
+## Installing this on your own account
+
+Nothing in the markup is account-specific, so there is no code to edit:
+
+1. **Connect the sources** — a Google Calendar plugin, a Weather plugin, and
+   optionally the Weather Glance recipe. Each must sit on a playlist (hidden is
+   fine) or its data never refreshes.
+2. **Create the plugin** — Plugins → Private Plugin → New, strategy **Plugin
+   Merge**, and tick **Remove screen padding**.
+3. **Add the custom fields** from `src/settings.yml`, or push the whole project
+   with `python tools/push.py`, which uploads them for you. The three
+   `plugin_instance_select` fields are what make it installable: they render as
+   dropdowns of *your* instances.
+4. **Paste the markup** from `src/*.liquid` into the matching fields.
+5. **Pick your three sources** in the plugin's own settings, save, then **Force
+   Refresh**. Until they are picked the plugin shows a first-run message rather
+   than an empty grid.
+
+If the grid stays on the first-run message after picking and saving, the fields
+are not persisting — check that each source is on a playlist, and note that
+re-uploading `settings.yml` replaces the field *definitions*, which can clear
+the selected *values*. Re-pick after a push.
+
 ## Setting it up on TRMNL
 
 1. **Connect the source plugins** and add each to a playlist. Hide them with the
@@ -108,17 +131,23 @@ laid out for the 800×480 original, so they leave dead space on a 600px panel.
 6. Tick **Remove screen padding**; the grid is designed to bleed to the edges.
 7. Save, pick your sources in the plugin's settings, then **Force Refresh**.
 
-A `plugin_instance_select` keyname resolves to the selected instance's **parsed
-data object**, so `calendar_source.events` and `weather_source.temperature` are
-the data — there are no plugin ids in the templates, and nothing to edit when
-moving the plugin to another account. Just pick the three sources in the
-plugin's settings.
+TRMNL aliases whatever the installer picks in a `plugin_instance_select` field
+under that field's keyname, so **the keyname is the data**. Shapes differ by
+source type: a native plugin exposes its snapshot flat (`calendar_source.events`)
+while a private plugin or webhook source nests it
+(`hourly_source.merge_variables.temperatures`). Each template resolves whichever
+is present, the same way TRMNL's own recipes do:
 
-The Merge Variables dropdown (`<plugin_keyname>_<plugin_setting_id>`) is the
-other way to reach the same data, but it hard-codes one account's instance ids
-into the markup, so it is a last resort for a source that will not appear in a
-dropdown. Note that a recipe is a private plugin, so Weather Glance appears
-there as `private_plugin_<id>`, not `weather_glance_<id>`.
+```liquid
+{%- assign cal = calendar_source.merge_variables | default: calendar_source -%}
+```
+
+**No plugin ids appear in the markup, by design.** An author's id means nothing
+on an installer's account — a fork would resolve the alias and render blank — so
+CI fails the build if one is reintroduced, mirroring the spec in
+`usetrmnl/trmnl-liquid-components`. The Merge Variables dropdown
+(`<plugin_keyname>_<plugin_setting_id>`) reaches the same data but pins the
+plugin to one account, so it is only useful for one-off debugging.
 
 Refresh cadence follows your playlist schedule: the sources refresh on their own
 interval and the new values map into this plugin.

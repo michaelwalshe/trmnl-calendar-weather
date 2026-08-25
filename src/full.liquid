@@ -19,47 +19,19 @@
 {%- endcomment -%}
 
 {%- comment -%} ---------- resolve the three sources ----------
-  A plugin_instance_select field resolves to the selected instance's parsed data
-  object, so the keyname is the data: calendar_source.events, weather_source.temperature.
-  No plugin ids belong in here - they would pin the template to one account.
+  TRMNL aliases whatever the installer picked in a plugin_instance_select field
+  under that field's keyname, so the keyname IS the data. A native plugin exposes
+  its snapshot flat (calendar_source.events); a private plugin or webhook source
+  nests it (hourly_source.merge_variables.temperatures). Resolve whichever is
+  present, the same way TRMNL's own recipes do.
 
-  Pick the three sources in this plugin's settings. Each must also sit on a
-  playlist (hidden is fine) or its data never refreshes.
+  Never reference a plugin id here. The author's id means nothing on someone
+  else's account - a fork would resolve the alias and render blank.
 {%- endcomment -%}
-{%- comment -%}
-  Prefer the form field: a plugin_instance_select keyname is meant to resolve to
-  the selected instance's parsed data. Fall back to the merge variable when it
-  does not, which is the case on a plugin whose sources have never been picked.
-  Test for the data itself, not mere presence - the field can hold an id string,
-  which is truthy but has no .events, and would render an empty grid silently.
-
-  The merge-variable names below pin this to one account. Delete them once the
-  form fields are confirmed populated; they exist so the plugin renders at all.
-{%- endcomment -%}
-{%- assign cal = calendar_source -%}
-{%- unless cal.events -%}{%- assign cal = google_calendar_451642 -%}{%- endunless -%}
-
-{%- assign wx = weather_source -%}
-{%- unless wx.temperature or wx.forecast -%}{%- assign wx = weather_451639 -%}{%- endunless -%}
-
-{%- comment -%}
-  A private plugin's merge variable exposes the plugin *definition* - markup blob
-  ids, custom field values - not its data. The recipe's own output sits one level
-  down under .merge_variables, and may nest again under .data. Unwrap both.
-
-  Each candidate is unwrapped and only adopted if it actually yields
-  temperatures, so a working source is never overwritten by a missing one.
-{%- endcomment -%}
-{%- assign hourly = hourly_source -%}
-{%- if hourly.merge_variables -%}{%- assign hourly = hourly.merge_variables -%}{%- endif -%}
+{%- assign cal = calendar_source.merge_variables | default: calendar_source -%}
+{%- assign wx = weather_source.merge_variables | default: weather_source -%}
+{%- assign hourly = hourly_source.merge_variables | default: hourly_source -%}
 {%- if hourly.data -%}{%- assign hourly = hourly.data -%}{%- endif -%}
-
-{%- unless hourly.temperatures -%}
-  {%- assign h_alt = private_plugin_454878 -%}
-  {%- if h_alt.merge_variables -%}{%- assign h_alt = h_alt.merge_variables -%}{%- endif -%}
-  {%- if h_alt.data -%}{%- assign h_alt = h_alt.data -%}{%- endif -%}
-  {%- if h_alt.temperatures -%}{%- assign hourly = h_alt -%}{%- endif -%}
-{%- endunless -%}
 
 {%- comment -%} ---------- settings (custom fields, all optional) ---------- {%- endcomment -%}
 {%- assign day_count = 7 -%}
@@ -787,7 +759,9 @@
     {%- endif -%}
   </div>
 
-  {%- unless cal -%}
+  {%- comment -%} test the data, not the field: an unselected field can be an
+    empty string, which Liquid counts as truthy {%- endcomment -%}
+  {%- unless cal.events -%}
     {%- comment -%} ============ first-run help ============ {%- endcomment -%}
     <div class="cw__cal">
       <div class="cw__setup p--6">
