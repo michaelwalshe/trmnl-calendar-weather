@@ -1,0 +1,114 @@
+name: Push to TRMNL
+
+# Uploads src/* to the private plugin whenever the markup changes on main.
+#
+# tools/push.py creates a NEW plugin when it cannot find an id, so an unguarded
+# run would make a fresh duplicate every time. Two things prevent that:
+#   - the id is read from the TRMNL_PLUGIN_ID repo variable, or from src/settings.yml
+#   - with no id known, only a manual run with "allow_create" may proceed
+# After a create, the server's settings.yml (which carries the new id) is
+# committed back, so later runs update in place.
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'src/**'
+      - '.github/workflows/push-trmnl.yml'
+  workflow_dispatch:
+    inputs:
+      dry_run:
+        description: 'Check the key and list the files, upload nothing'
+        type: boolean
+        default: false
+      allow_create:
+        description: 'Create a new plugin if no id is known (first push only)'
+        type: boolean
+        default: false
+
+# never let two uploads race the settings.yml write-back
+concurrency:
+  group: trmnl-push
+  cancel-in-progress: false
+
+jobs:
+  push:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write   # only to commit the plugin id back after a create
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      # tools/push.py is standard library only - nothing to install
+
+      - name: Work out which plugin to update
+        id: target
+        env:
+          VAR_ID: ${{ vars.TRMNL_PLUGIN_ID }}
+        run: |
+          id="$VAR_ID"
+          if [ -z "$id" ]; then
+            id=$(sed -n "s/^id:[[:space:]]*//p" src/settings.yml | tr -d "\"'" | head -1)
+          fi
+          echo "id=$id" >> "$GITHUB_OUTPUT"
+          if [ -n "$id" ]; then
+            echo "Updating plugin $id"
+          else
+            echo "No plugin id known yet"
+          fi
+
+      - name: Refuse to create a duplicate plugin
+        if: steps.target.outputs.id == '' && github.event.inputs.allow_create != 'true'
+        run: |
+          echo "::error::No plugin id found. Set the TRMNL_PLUGIN_ID repo variable, or"
+          echo "::error::run this workflow manually with 'allow_create' ticked to make the"
+          echo "::error::plugin once. Pushing blind would create a second copy every run."
+          exit 1
+
+      - name: Verify the API key
+        env:
+          TRMNL_API_KEY: ${{ secrets.TRMNL_API_KEY }}
+          PLUGIN_ID: ${{ steps.target.outputs.id }}
+        run: |
+          if [ -z "$TRMNL_API_KEY" ]; then
+            echo "::error::Secret TRMNL_API_KEY is empty or not set for this repository."
+            exit 1
+          fi
+          if [ -n "$PLUGIN_ID" ]; then
+            python tools/push.py --dry-run --id "$PLUGIN_ID"
+          else
+            python tools/push.py --dry-run
+          fi
+
+      - name: Upload
+        if: github.event.inputs.dry_run != 'true'
+        env:
+          TRMNL_API_KEY: ${{ secrets.TRMNL_API_KEY }}
+          PLUGIN_ID: ${{ steps.target.outputs.id }}
+        run: |
+          if [ -n "$PLUGIN_ID" ]; then
+            python tools/push.py --id "$PLUGIN_ID"
+          else
+            python tools/push.py
+          fi
+
+      - name: Persist the plugin id
+        if: github.event.inputs.dry_run != 'true'
+        env:
+          BRANCH: ${{ github.ref_name }}
+        run: |
+          if git diff --quiet -- src/settings.yml; then
+            echo "settings.yml unchanged, nothing to commit"
+            exit 0
+          fi
+          git config user.name  "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add src/settings.yml
+          # [skip ci] matters: this commit touches src/ and would otherwise
+          # retrigger the workflow that made it
+          git commit -m "Persist TRMNL plugin id from push [skip ci]"
+          git push origin "HEAD:refs/heads/$BRANCH"

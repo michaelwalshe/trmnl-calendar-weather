@@ -133,6 +133,34 @@ the local one — that is how the plugin id persists, so later pushes update in
 place. That rewrite drops the comments from `src/settings.yml`; `git diff` shows
 exactly what changed.
 
+### From CI
+
+`.github/workflows/push-trmnl.yml` runs the same script whenever `src/**`
+changes on `main`, and on demand from the Actions tab. It needs the
+`TRMNL_API_KEY` repository secret.
+
+The one thing to get right is the plugin id. `push.py` **creates a new plugin
+when it cannot find one**, so a workflow that ran without an id would make a
+fresh duplicate every time. The id is resolved from the `TRMNL_PLUGIN_ID`
+repository variable, or failing that from `id:` in `src/settings.yml`; with
+neither, the run fails rather than guessing. To make the plugin the first time,
+either:
+
+- push once locally (`python tools/push.py`) and commit the `src/settings.yml`
+  the server hands back, which is the id-bearing version; or
+- run the workflow manually with **allow_create** ticked — it will create the
+  plugin and commit the new `settings.yml` back to the branch itself. That
+  commit is marked `[skip ci]`, because it touches `src/` and would otherwise
+  retrigger the workflow that made it.
+
+**Manual run** also offers **dry_run**, which authenticates and lists the files
+without uploading. The workflow verifies the key that way before every real
+upload, so a missing or expired secret fails before anything reaches the device.
+
+The write-back needs `contents: write`, which the workflow requests. If your
+repository or organisation caps the `GITHUB_TOKEN` to read-only, set
+`TRMNL_PLUGIN_ID` instead and the workflow never needs to commit.
+
 ## Local preview
 
 `.trmnlp.yml` carries a sample merge payload shaped like the real thing, so the
