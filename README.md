@@ -1,158 +1,262 @@
 # Week + Weather — TRMNL plugin merge
 
 A single TRMNL private plugin that draws a rolling-week time grid in the style of
-Google Calendar's week view, with a thin weather strip across the top. Both halves
-come from plugins you already have connected: the native calendar plugin supplies
-the events, the native weather plugin supplies conditions and the two-day forecast.
-The plugin itself fetches nothing — it uses the **Plugin Merge** strategy, which
-hands your other plugins' parsed JSON to your own markup.
+Google Calendar's week view, under a weather strip with an hourly temperature
+graph. It fetches nothing itself: the **Plugin Merge** strategy hands it the
+parsed JSON of plugins you already have connected.
 
-Preview renders (from the sample payload, not live data):
+Three sources, all selected from dropdowns in the plugin's own settings:
 
-| Layout | File |
-|---|---|
-| Full, 800×480 | `_build/full.png` |
-| Full, stress payload | `_build/full-dense.png` |
-| Half horizontal | `_build/half_horizontal.png` |
-| Half vertical | `_build/half_vertical.png` |
-| Quadrant | `_build/quadrant.png` |
+| Field | Plugin | Supplies |
+|---|---|---|
+| `calendar_source` | Google Calendar | events, colours, and the display preferences set on that plugin |
+| `weather_source` | Weather (any provider) | now, today, tomorrow |
+| `hourly_source` | Weather Glance recipe | the next few hours, drawn as bars — optional |
+
+**Target panel: 800×600, 2-bit greyscale** — a Kindle 4 in landscape, about
+167 PPI. That is denser than the TRMNL original (800×480 at ~137 PPI), so type
+is physically smaller for the same pixel size; the layout spends the extra
+height on larger text rather than on more rows. Set **Screen height** if your
+panel is a different size.
+
+Preview renders, from the sample payload in `.trmnlp.yml`:
+
+| Layout | File | Size |
+|---|---|---|
+| Full | `_build/full.png` | 800×600 |
+| Full, stress payload | `_build/full-dense.png` | 800×600 |
+| Half horizontal | `_build/half_horizontal.png` | 800×300 |
+| Half vertical | `_build/half_vertical.png` | 400×600 |
+| Quadrant | `_build/quadrant.png` | 400×300 |
 
 ## What the full layout shows
 
 - A rolling week: today is the first column, seven columns by default. Set
-  **First column** to `week` to pin column one to the start of your week instead.
-- Hour rows for a window derived from your calendar plugin's own scroll time, so
-  the day fills the screen instead of wasting rows on 02:00. Override with the
-  **First hour** / **Last hour** fields.
-- Timed events as bordered blocks positioned and sized by their real times.
-  Overlapping events split the column the way Google Calendar does — only the
-  events that actually collide get narrower. Anything currently in progress is
-  drawn inverted. A fourth concurrent event becomes a `+1` badge rather than
-  hiding a block.
-- All-day events in a band under the day headings, one chip per day covered,
-  overflowing to `+N more`.
-- Today's column carries a now-line with a marker dot.
-- Weather strip: current icon, temperature, conditions, feels-like and humidity,
-  then today's and tomorrow's high/low.
+  **First column** to `week` to pin column one to the start of your week.
+- Hour rows covering the window your calendar plugin already computes
+  (`scroll_time` … `scroll_time_end`), so the day fills the screen instead of
+  wasting rows on 03:00. Override with **First hour** / **Last hour**. Each hour
+  label is centred on its own gridline with a tick running into the grid, so
+  there is no guessing whether a label names the row above it or below it.
+- The window is capped at 14 hours (fewer on a short panel) so that one 06:00
+  or 23:00 outlier cannot squeeze the working day into unreadable rows. When the
+  window is inferred rather than asked for, empty hours are also trimmed off the
+  tail. Events left outside it are counted in a `+N` badge on the day heading.
+- Timed events as blocks positioned and sized by their real times. Blocks carry
+  no start time — read across to the hour column, which is labelled in full
+  (`9 AM`, `12 PM`) — so the width goes to the title instead. Overlapping events
+  split the column the way Google Calendar does: only the events that actually
+  collide get narrower. A fourth concurrent event becomes a `+1` badge rather
+  than hiding a block.
+- Every event label is 12px — one size throughout. The framework's pixel fonts
+  come at 12, 16 and 21 only, so this is one step below the hour labels, which
+  stay at 16px as the time reference. Blocks of 28px or more wrap to two lines.
+  A block narrower than about 44px cannot hold a legible word, so it drops the
+  title and becomes a solid marker instead of printing three characters and an
+  ellipsis.
+- **Each calendar gets its own greyscale edge bar** — solid, dark, mid, light,
+  assigned per distinct `background_color`. The greys come from the framework's
+  `--bg-gray-N-*` tokens, so on a 2-bit panel they resolve to real grey levels
+  and on a 1-bit panel to dither tiles. Anything in progress is drawn inverted; anything with
+  "Cancel" in the title gets a dashed outline instead of a solid one.
+- Weekend columns and their all-day cells shaded with a pale tile; today's
+  heading inverted. Both follow the `shade_weekends` and `highlight_today`
+  settings on the calendar plugin. The heading text itself is never shaded — a
+  tile behind 12px type breaks up the glyphs.
+- All-day events in a band under the headings, one outlined chip per day
+  covered, overflowing to `+N more`. Inversion is reserved for today and for
+  anything in progress, so it keeps meaning something.
+- A now-line with a marker dot across today's column.
+- Weather strip on the same column track as the grid: current conditions sit
+  over today's column, tomorrow's high/low over tomorrow's column, and the
+  hourly graph fills the columns after that. Without an hourly source the strip
+  shrinks and the grid takes the space back.
+- The graph is a row of **rounded pills: height is temperature, fill is how
+  sunny that hour is**, read from the hourly source's own per-hour icon —
 
-Half and quadrant layouts drop the grid — it is unreadable below 800×480 — and
-show compact agendas with the same weather line, so the plugin still behaves in
-a mashup.
+  | Fill | Hour |
+  |---|---|
+  | empty | clear |
+  | light grey | partly cloudy |
+  | dark grey | overcast or fog |
+  | solid | rain, snow, sleet or storms |
+
+  Those are the four levels a 2-bit panel renders flat, with no dither texture to
+  muddy them at pill size; on 1-bit the middle two fall back to tiles. The
+  nearest hour gets a ring around its pill rather than a different fill, so fill
+  stays a pure weather signal.
+- Locations appear inside long events when they are a real place rather than a
+  Teams or Zoom link.
+
+Half and quadrant layouts drop the grid — unreadable in a mashup cell — and show
+compact agendas with a one-line weather header. They do not carry the calendar
+tones. They share the full layout's weather-icon mapping but are otherwise still
+laid out for the 800×480 original, so they leave dead space on a 600px panel.
 
 ## Setting it up on TRMNL
 
-1. **Connect the two source plugins** (Calendar with a Google account, and
-   Weather) if you have not already, and add each to a playlist. Hide them with
-   the eyeball icon if you don't want to see their native screens — but they must
-   stay on a playlist, because only playlist plugins sync fresh data.
-2. Set the calendar instance's layout to **Week**. That makes it emit
-   `scroll_time` / `scroll_time_end` and a week's worth of events, which is what
-   this plugin reads.
+1. **Connect the source plugins** and add each to a playlist. Hide them with the
+   eyeball icon if you don't want their native screens — but they must stay on a
+   playlist, because only playlist plugins sync fresh data.
+2. Set the calendar instance's layout to **Week** (or rolling week). That is what
+   makes it emit `scroll_time`, `scroll_time_end` and a week of events.
 3. **Plugins → Private Plugin → New**, strategy **Plugin Merge**.
-4. Add two custom fields via the form builder, or import `src/settings.yml`:
-   - `calendar_source`, type `plugin_instance_select`, `plugin_keyname: google_calendar`
-   - `weather_source`, type `plugin_instance_select`, `plugin_keyname: weather`
-   Plus the optional `days`, `week_start`, `hour_from`, `hour_to` fields.
-5. **Edit Markup** and paste `src/full.liquid` into the Full field (and the other
-   three files into their fields if you plan to use mashups).
-6. Tick **Remove screen padding** — the grid is designed to bleed to the edges.
-7. Save, pick your two sources in the plugin's settings, then **Force Refresh**.
+4. Add the custom fields from `src/settings.yml` — or push the whole project with
+   `python tools/push.py`, which uploads them for you.
+5. Paste `src/full.liquid` into the Full markup field, and the other three files
+   into theirs if you use mashups.
+6. Tick **Remove screen padding**; the grid is designed to bleed to the edges.
+7. Save, pick your sources in the plugin's settings, then **Force Refresh**.
 
-No form fields? The template falls back to hard-coded merge variables. Open the
-Merge Variables dropdown in the markup editor, find the nodes named
-`<plugin_keyname>_<plugin_setting_id>` (e.g. `google_calendar_12345`), and edit
-the two `assign` lines at the top of the template.
+If a source is not in the dropdown — the Weather Glance recipe may not be, since
+recipes are private plugins — edit the fallback merge variables at the top of the
+template instead. Their names are `<plugin_keyname>_<plugin_setting_id>`, listed
+in the Merge Variables dropdown of the markup editor.
 
-Refresh cadence follows your playlist schedule: the source plugins refresh on
-their own interval and the new values map into this plugin.
+Refresh cadence follows your playlist schedule: the sources refresh on their own
+interval and the new values map into this plugin.
+
+## Publishing
+
+`trmnlp push` needs Ruby or Docker. `tools/push.py` speaks the same private API
+with the standard library only:
+
+```sh
+python tools/push.py --dry-run   # check the key, list what would go up
+python tools/push.py             # create or update the plugin
+python tools/push.py --id 12345  # push to a specific existing plugin
+```
+
+It reads `TRMNL_API_KEY` from the environment or `.env` (gitignored), uploads
+`src/*` as a flat zip, and writes the server's canonical `settings.yml` back over
+the local one — that is how the plugin id persists, so later pushes update in
+place. That rewrite drops the comments from `src/settings.yml`; `git diff` shows
+exactly what changed.
 
 ## Local preview
 
-`trmnlp` is the official dev server, and `.trmnlp.yml` in this repo already holds
-a sample merge payload so the grid renders without touching your account:
+`.trmnlp.yml` carries a sample merge payload shaped like the real thing, so the
+grid renders without touching your account:
 
 ```sh
 gem install trmnl_preview     # needs Ruby >= 3.4
 trmnlp serve                  # http://localhost:4567
 ```
 
-Or via Docker, with no local Ruby:
+With no Ruby, `tools/render.py` renders the templates using python-liquid and a
+Ruby-compatible `date` filter:
 
 ```sh
-docker run --pull always -p 4567:4567 -v "$(pwd):/plugin" trmnl/trmnlp serve --bind 0.0.0.0
+uv run --with python-liquid --with pyyaml --with python-dateutil     tools/render.py full                      # writes _build/full.html
+uv run --with python-liquid --with pyyaml --with python-dateutil     tools/render.py full sample/dense.yml     # a deliberately awkward payload
 ```
 
-If neither is available, `tools/render.py` renders the templates with
-python-liquid and a Ruby-compatible `date` filter:
+It wraps the markup in the same classes the hosted renderer applies:
+`screen--no-bleed` (what **Remove screen padding** sets), the bit depth, and the
+device class carrying `--screen-w` / `--screen-h`. Defaults are
+`--device amazon_kindle_7 --bits 2`, i.e. 800×600 2-bit; pass `--device og` for
+the 800×480 original. Without those classes the preview renders 780×460 inside a
+10px margin the panel does not have.
+
+Each run prints the exact headless-Chrome command for that view, sized to the
+device — mashup cells are clipped to their share of the screen:
 
 ```sh
-uv run --with python-liquid --with pyyaml --with python-dateutil \
-    tools/render.py full                      # writes _build/full.html
-uv run --with python-liquid --with pyyaml --with python-dateutil \
-    tools/render.py full sample/dense.yml     # a deliberately awkward payload
+chrome --headless=new --window-size=800,600 --hide-scrollbars     --virtual-time-budget=8000 --screenshot=_build/full.png _build/full.html
 ```
 
-The PNGs in `_build/` were produced from that HTML with headless Chrome:
+Both sample payloads pin `trmnl.system.timestamp_utc`, so renders are
+reproducible. Without it the now-line, the in-progress highlight and therefore
+the committed PNGs all drift with the wall clock.
 
-```sh
-chrome --headless=new --window-size=800,480 --hide-scrollbars \
-    --screenshot=_build/full.png _build/full.html
-```
+**Do not put real calendar data in `.trmnlp.yml` or `sample/` — this repository
+is public.** The sample events are invented; only their shape is real.
 
 ## Customising the look
 
-Everything visual lives in the `<style>` block at the top of each template.
-The knobs worth knowing:
+Everything visual is in the `<style>` block at the top of each template:
 
 - `--ink` / `--paper` resolve through the framework's `--black` / `--white`
   tokens, so dark mode inverts correctly. Don't hard-code hex values.
-- `--gut` (hour-label column), `--wx-h` (weather strip), `--head-h` (day
-  headings) are plain pixel heights; the time grid takes the remainder.
-- Text sizing uses the framework's `text--small` / `text--base` / `text--large`
-  utilities rather than fixed font sizes, so the correct pixel font is picked per
-  device and density. `settings.yml` pins `framework_version: '3.2'`.
-- Event blocks are white with a black rule and a 4px black left edge. For the
-  heavier native look, swap `.cw__ev` to `background: var(--ink); color: var(--paper)`.
+- Greys come from the framework's `--bg-gray-N-color` / `--bg-gray-N-image`
+  pairs (N runs 1 lightest … 75 darkest) with `--dither-bg-size`. They drive the
+  calendar edge bars, the graph bars and the weekend shading. Because they are
+  the framework's own tokens they follow `--framework-bit-depth`: flat grey on a
+  2-bit panel, dither tiles on 1-bit. Don't reintroduce the `gray-N.png` files —
+  those are fixed 1-bit and cost four network fetches per render.
+- `--gut`, `--wx-h`, `--head-h` are the hour-label column, weather strip and day
+  heading heights in pixels; the grid takes what is left. `--gut` narrows
+  automatically on a 24-hour clock, where the widest label is `23` not `12 PM`.
+- Text uses the framework's `text--small` (12px) / `text--base` (16px) /
+  `text--large` (21px) utilities. These are bitmap pixel fonts — TRMNL12,
+  TRMNL16, TRMNL21 — so those three sizes are the only crisp ones; don't invent
+  intermediate sizes. `settings.yml` pins `framework_version: '3.2'`.
+- Event labels pin `line-height` to 1, so a label is exactly its font size tall.
+  That is what lets a 30-minute block carry a line without shaving the
+  descenders off it, and it is what sets the block height thresholds below.
 
 ## Data it relies on
 
-From the calendar plugin: `events` (each with `summary`, `description`,
-`all_day`, `start_full`, `end_full`, `start`, `end`), plus `today_in_tz`,
-`scroll_time`, `scroll_time_end`, `first_day`, `time_format`,
-`include_description`. From the weather plugin: `temperature`, `feels_like`,
-`humidity`, `conditions`, `weather_image`, `today_weather_image`,
-`tomorrow_weather_image`, and `forecast.today` / `forecast.tomorrow` with
-`mintemp`, `maxtemp`, `day_override`.
+**Calendar**: `events[]` with `summary`, `start_full`, `end_full`, `start`,
+`end`, `all_day`, `location`, `background_color`; plus `today_in_tz` (a full
+timestamp — only its UTC offset is read, because `trmnl.user.utc_offset` reads 0
+on accounts with no time zone set; the date itself comes from the clock, so the
+columns, the today highlight and the now-line cannot disagree), `scroll_time`,
+`scroll_time_end`,
+`first_day`, `time_format`, `shade_weekends`, `colorize_events`,
+`highlight_today`.
 
-The event list is accepted either as a flat array or as a hash grouped by date
-label — both shapes exist in the wild — and is flattened before use. If your
-payload turns out to be shaped differently, the grid says so on screen rather
-than rendering blank. Check yours at
+**Weather**: `temperature`, `weather_image`, `tomorrow_weather_image`, and
+`forecast.tomorrow` / `forecast.right_now`. (Feels-like and humidity are read by
+the mashup layouts only — the full strip drops them for width.) Conditions fall back through
+`conditions` → `right_now_conditions` → `forecast.right_now.conditions`, since
+the Tempest provider omits the first. Icon values may be bare names or absolute
+URLs, and either may be colour art; both are reduced to a slug and mapped onto
+TRMNL's mono `wi-*` set, which is what survives a 2-bit panel. Unrecognised
+values fall back to `wi-na`.
+
+**Hourly**: `current_temp`, `temperatures` (array of arrays),
+`timestamps_formatted` and `weather_icons` (which drives the pill fills — absent,
+every pill takes the partly-cloudy level), read from the node directly or from
+its `data` child.
+Temperatures always come from this source when it has them — including the
+headline figure — so the number and the graph agree; everything else (icon,
+conditions, tomorrow's high/low) stays with the weather plugin.
+
+To check your own payloads:
 `https://trmnl.com/plugins/google_calendar?data=true&plugin_setting_id=<id>`.
-
-Weather icons load from `https://trmnl.com/images/plugins/weather/<name>.svg`.
-If `weather_image` already holds a full URL (the Tempest plugin does this), it is
-used as-is.
 
 ## Known limitations
 
 - Three side-by-side events per day; a fourth concurrent event is counted in a
   `+1` badge instead of being drawn.
+- At seven columns a three-way overlap leaves ~35px per block, which cannot hold
+  a word, so those render as unlabelled markers. Fewer day columns widens them.
+  A two-way overlap keeps its label but fits only ten or so characters.
 - An event running past midnight is drawn on its start day only, clipped at the
-  bottom of the grid, rather than continuing into the next column.
+  bottom of the grid.
 - Multi-day all-day events repeat as a chip on each day they cover rather than
   drawing one bar across the columns.
-- `trmnlp lint` reports `LimitedInlineStyles`: it counts CSS property names
+- Tones are assigned by sorted `background_color`, so a calendar's shade can move
+  if a calendar has no events at all in the visible week.
+- The strip, heading and all-day band are fixed pixel heights rather than
+  multiples of the framework's `--ui-scale`, so they do not grow on a panel with
+  a device scale other than 1. The grid itself takes whatever is left.
+- The `+1` lane-spill badge sits in the bottom-right of its column and can cover
+  the corner of the block beneath it. Window-overflow counts moved to the day
+  heading for this reason; the spill count stays put because it belongs next to
+  the stack it came from.
+- Only the full layout has had the column-aligned weather strip, the no-times
+  treatment and the 800×600 sizing; the mashup layouts still print a time per
+  row, which is what makes sense in a list.
+- `trmnlp lint` reports `LimitedInlineStyles` — it counts CSS property names
   anywhere in the markup and caps them at six, which a hand-built grid exceeds.
-  It is advisory and only gates the optional GitHub Actions workflow.
-- The now-line and the in-progress highlight need `trmnl.user.utc_offset`; if it
-  is missing they fall back to server time, and the now-line is suppressed when
-  the derived date disagrees with the calendar plugin's own date.
+  Advisory only.
 
 ## References
 
 - Plugin Data API and the Plugin Merge strategy — https://docs.trmnl.com/go/private-api/plugin-data
 - Custom plugin form builder, incl. `plugin_instance_select` — https://help.trmnl.com/en/articles/10513740-custom-plugin-form-builder
-- Framework 3.2 docs (view, layout, border, text size, tokens) — https://trmnl.com/framework
-- Native plugin markup and data shapes — https://github.com/usetrmnl/plugins (`lib/calendar`, `lib/weather`)
+- Framework 3.2 docs — https://trmnl.com/framework
+- Native plugin markup and data shapes — https://github.com/usetrmnl/plugins
 - `trmnlp` dev server — https://github.com/usetrmnl/trmnlp

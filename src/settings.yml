@@ -20,7 +20,14 @@ custom_fields:
     name: Weather
     plugin_keyname: weather
     description: Which weather instance to read conditions from
-    help_text: Only plugins currently on a playlist or mashup appear here. Hidden is fine.
+    help_text: Works with the native Weather plugin on any provider.
+
+  - keyname: hourly_source
+    field_type: plugin_instance_select
+    name: Hourly weather (optional)
+    plugin_keyname: private_plugin
+    description: Weather Glance instance, drawn as the temperature graph
+    help_text: Leave empty to drop the graph from the weather strip.
 
   - keyname: days
     field_type: select
@@ -42,6 +49,15 @@ custom_fields:
       - week
     default: rolling
 
+  - keyname: now_line
+    field_type: select
+    name: Now line
+    description: Draw a rule across today's column at the current time
+    options:
+      - 'yes'
+      - 'no'
+    default: 'yes'
+
   - keyname: hour_from
     field_type: number
     name: First hour
@@ -53,3 +69,10 @@ custom_fields:
     name: Last hour
     description: Leave blank to follow the calendar plugin's own scroll time
     help_text: 1-24
+
+  - keyname: screen_height
+    field_type: number
+    name: Screen height
+    description: Panel height in pixels, used to decide how much text fits in a block
+    help_text: 600 for an 800x600 panel, 480 for the TRMNL original. Blank means 600.
+    default: '600'

@@ -1,14 +1,20 @@
 {%- comment -%}
 ================================================================================
   WEEK + WEATHER  -  TRMNL private plugin, "Plugin Merge" strategy
-  Rolling week time-grid (Google Calendar style) + thin weather strip.
+  Rolling week time grid + weather strip with an hourly temperature graph.
 
-  Data sources resolve in this order:
-   1. the two plugin_instance_select form fields (calendar_source, weather_source)
-   2. a hard-coded merge variable, for accounts without those fields set up.
-      Merge variables are named <plugin_keyname>_<plugin_setting_id> and are
-      listed in the "Merge Variables" dropdown of the markup editor - edit the
-      two fallback names below to match yours.
+  Three sources, each resolved from a plugin_instance_select form field, with a
+  hard-coded merge variable as fallback (edit the names to match the ones in the
+  Merge Variables dropdown - they are <plugin_keyname>_<plugin_setting_id>):
+
+    calendar_source  Google Calendar        events + display preferences
+    weather_source   Weather                now, today, tomorrow
+    hourly_source    Weather Glance recipe  next few hours, drawn as bars
+                     (optional - the strip drops the graph without it)
+
+  Sized for an 800x600 panel at ~167 PPI (Kindle 4 in landscape). The layout is
+  flex/grid and fills whatever it is given; only the text-density heuristics
+  need the pixel height, which comes from screen_height below.
 ================================================================================
 {%- endcomment -%}
 
@@ -17,6 +23,10 @@
 
 {%- assign wx = weather_source -%}
 {%- unless wx -%}{%- assign wx = weather_67890 -%}{%- endunless -%}
+
+{%- assign hourly = hourly_source -%}
+{%- unless hourly -%}{%- assign hourly = weather_glance_67891 -%}{%- endunless -%}
+{%- if hourly.data -%}{%- assign hourly = hourly.data -%}{%- endif -%}
 
 {%- comment -%} ---------- settings (custom fields, all optional) ---------- {%- endcomment -%}
 {%- assign day_count = 7 -%}
@@ -29,49 +39,97 @@
 {%- assign cfg_to = -1 -%}
 {%- if hour_to and hour_to != "" -%}{%- assign cfg_to = hour_to | plus: 0 -%}{%- endif -%}
 
-{%- comment -%} ---------- normalise the calendar payload ----------
-  The calendar plugins expose events either as a flat array, or as a hash
-  grouped by date label ("April 09" => [...]). Both are flattened here.
+{%- assign show_now = true -%}
+{%- if now_line == "no" -%}{%- assign show_now = false -%}{%- endif -%}
+
+{%- comment -%} ---------- panel size ----------
+  Only used to decide how much text fits in a block; the layout is flex and
+  fills the real screen regardless. trmnl.device wins when the platform sets it.
 {%- endcomment -%}
-{%- assign events = "" | split: "," -%}
-{%- if cal.events -%}
-  {%- assign probe = cal.events | first -%}
-  {%- if probe.summary -%}
-    {%- assign events = cal.events -%}
-  {%- else -%}
-    {%- for grp in cal.events -%}
-      {%- assign events = events | concat: grp[1] -%}
-    {%- endfor -%}
+{%- assign screen_w = 800 -%}
+{%- assign screen_h = 600 -%}
+{%- if screen_height and screen_height != "" -%}{%- assign screen_h = screen_height | plus: 0 -%}{%- endif -%}
+{%- if trmnl.device.width -%}{%- assign screen_w = trmnl.device.width | plus: 0 -%}{%- endif -%}
+{%- if trmnl.device.height -%}{%- assign screen_h = trmnl.device.height | plus: 0 -%}{%- endif -%}
+{%- if screen_w < 320 -%}{%- assign screen_w = 800 -%}{%- endif -%}
+{%- if screen_h < 240 -%}{%- assign screen_h = 600 -%}{%- endif -%}
+
+{%- comment -%} preferences that come from the calendar plugin itself {%- endcomment -%}
+{%- assign shade_weekends = true -%}
+{%- if cal.shade_weekends == false -%}{%- assign shade_weekends = false -%}{%- endif -%}
+{%- assign colorize = true -%}
+{%- if cal.colorize_events == false -%}{%- assign colorize = false -%}{%- endif -%}
+{%- assign highlight_today = true -%}
+{%- if cal.highlight_today == false -%}{%- assign highlight_today = false -%}{%- endif -%}
+
+{%- assign events = cal.events | sort: "start_full" -%}
+
+{%- comment -%} ---------- clock ----------
+  One definition of "today", taken from the clock. today_in_tz is read only for
+  the UTC offset it carries, because trmnl.user.utc_offset reads 0 on accounts
+  with no time zone set. Driving the columns, the today highlight, the now-line
+  and the in-progress state from a single value stops them disagreeing when
+  calendar data is cached across midnight.
+{%- endcomment -%}
+{%- assign tz_off = 0 -%}
+{%- if trmnl.user.utc_offset -%}{%- assign tz_off = trmnl.user.utc_offset | plus: 0 -%}{%- endif -%}
+{%- if cal.today_in_tz -%}
+  {%- assign z = cal.today_in_tz | date: "%z" -%}
+  {%- if z and z != "" -%}
+    {%- assign z_h = z | slice: 1, 2 | plus: 0 -%}
+    {%- assign z_m = z | slice: 3, 2 | plus: 0 -%}
+    {%- assign z_s = z_h | times: 3600 -%}
+    {%- assign z_s = z_m | times: 60 | plus: z_s -%}
+    {%- if z contains "-" -%}{%- assign z_s = 0 | minus: z_s -%}{%- endif -%}
+    {%- assign tz_off = z_s -%}
   {%- endif -%}
 {%- endif -%}
-{%- assign events = events | sort: "start_full" -%}
 
-{%- comment -%} ---------- "now", in the user's time zone ---------- {%- endcomment -%}
-{%- assign tz_off = 0 -%}
-{%- if trmnl.user.utc_offset and trmnl.user.utc_offset != "" -%}{%- assign tz_off = trmnl.user.utc_offset | plus: 0 -%}{%- endif -%}
 {%- assign now_utc = "now" | date: "%s" | plus: 0 -%}
-{%- if trmnl.system.timestamp_utc and trmnl.system.timestamp_utc != "" -%}{%- assign now_utc = trmnl.system.timestamp_utc | plus: 0 -%}{%- endif -%}
+{%- if trmnl.system.timestamp_utc -%}{%- assign now_utc = trmnl.system.timestamp_utc | plus: 0 -%}{%- endif -%}
 {%- assign now_local = now_utc | plus: tz_off -%}
-{%- assign now_date = now_local | date: "%Y-%m-%d" -%}
+{%- assign today = now_local | date: "%Y-%m-%d" -%}
 {%- assign now_h = now_local | date: "%H" | plus: 0 -%}
 {%- assign now_m = now_local | date: "%M" | plus: 0 -%}
 {%- assign now_min = now_h | times: 60 | plus: now_m -%}
-
-{%- comment -%} today: trust the calendar plugin's tz-aware date first {%- endcomment -%}
-{%- assign today = now_date -%}
-{%- if cal.today_in_tz and cal.today_in_tz != "" -%}{%- assign today = cal.today_in_tz -%}{%- endif -%}
 
 {%- comment -%} ---------- first column (noon anchors avoid DST drift) ---------- {%- endcomment -%}
 {%- assign base_noon = today | date: "%s" | plus: 43200 -%}
 {%- if week_start == "week" -%}
   {%- assign first_day = 1 -%}
-  {%- if cal.first_day and cal.first_day != "" -%}{%- assign first_day = cal.first_day | plus: 0 -%}{%- endif -%}
+  {%- if cal.first_day -%}{%- assign first_day = cal.first_day | plus: 0 -%}{%- endif -%}
   {%- assign dow = base_noon | date: "%w" | plus: 0 -%}
   {%- assign shift = dow | minus: first_day -%}
   {%- if shift < 0 -%}{%- assign shift = shift | plus: 7 -%}{%- endif -%}
   {%- assign shift_s = shift | times: 86400 -%}
   {%- assign base_noon = base_noon | minus: shift_s -%}
 {%- endif -%}
+
+{%- comment -%} ---------- which grid column is today? the weather strip lines up with it ---------- {%- endcomment -%}
+{%- assign today_idx = 0 -%}
+{%- for n in (1..day_count) -%}
+  {%- assign off = n | minus: 1 | times: 86400 -%}
+  {%- assign dk = base_noon | plus: off | date: "%Y-%m-%d" -%}
+  {%- if dk == today -%}{%- assign today_idx = n -%}{%- endif -%}
+{%- endfor -%}
+{%- if today_idx < 1 -%}{%- assign today_idx = 1 -%}{%- endif -%}
+{%- assign last_col = day_count | plus: 1 -%}
+{%- assign c_now = today_idx | plus: 1 -%}
+{%- assign c_tmrw = c_now | plus: 1 -%}
+{%- assign c_graph = c_tmrw | plus: 1 -%}
+
+{%- comment -%} ---------- one grey tone per calendar colour ---------- {%- endcomment -%}
+{%- assign palette = "" -%}
+{%- if colorize -%}
+  {%- for e in events -%}
+    {%- if e.background_color and e.background_color != "" -%}
+      {%- unless palette contains e.background_color -%}
+        {%- assign palette = palette | append: e.background_color | append: "," -%}
+      {%- endunless -%}
+    {%- endif -%}
+  {%- endfor -%}
+{%- endif -%}
+{%- assign palette = palette | split: "," | sort -%}
 
 {%- comment -%} ---------- all-day band height ---------- {%- endcomment -%}
 {%- assign ad_max = 0 -%}
@@ -92,7 +150,55 @@
 {%- assign ad_rows = ad_max -%}
 {%- if ad_rows > 2 -%}{%- assign ad_rows = 2 -%}{%- endif -%}
 {%- assign ad_px = 0 -%}
-{%- if ad_rows > 0 -%}{%- assign ad_px = ad_rows | times: 18 | plus: 3 -%}{%- endif -%}
+{%- if ad_rows > 0 -%}{%- assign ad_px = ad_rows | times: 20 | plus: 3 -%}{%- endif -%}
+
+{%- comment -%} ---------- hourly series ----------
+  Round once: the bar heights use the same integer the label prints, so two
+  readings both shown as 16 deg are never drawn at different heights.
+{%- endcomment -%}
+{%- assign temps = hourly.temperatures -%}
+{%- assign t_min = 999 -%}
+{%- assign t_max = -999 -%}
+{%- for t in temps -%}
+  {%- assign v = t | first -%}
+  {%- unless v -%}{%- assign v = t -%}{%- endunless -%}
+  {%- assign v = v | round -%}
+  {%- if v < t_min -%}{%- assign t_min = v -%}{%- endif -%}
+  {%- if v > t_max -%}{%- assign t_max = v -%}{%- endif -%}
+{%- endfor -%}
+{%- assign t_span = t_max | minus: t_min -%}
+{%- if t_span <= 0 -%}{%- assign t_span = 1 -%}{%- endif -%}
+
+{%- comment -%} which bar is the nearest hour? the labels are pre-formatted
+  ("8 PM" or "20:00"), so read the leading number and any AM/PM marker {%- endcomment -%}
+{%- assign near_i = -1 -%}
+{%- assign near_d = 99 -%}
+{%- for ts in hourly.timestamps_formatted -%}
+  {%- assign tsu = ts | upcase -%}
+  {%- assign th = tsu | split: ":" | first | split: " " | first | plus: 0 -%}
+  {%- if tsu contains "PM" and th < 12 -%}{%- assign th = th | plus: 12 -%}{%- endif -%}
+  {%- if tsu contains "AM" and th == 12 -%}{%- assign th = 0 -%}{%- endif -%}
+  {%- assign d = th | minus: now_h -%}
+  {%- if d < 0 -%}{%- assign d = 0 | minus: d -%}{%- endif -%}
+  {%- if d > 12 -%}{%- assign d = 24 | minus: d -%}{%- endif -%}
+  {%- if d < near_d -%}{%- assign near_d = d -%}{%- assign near_i = forloop.index0 -%}{%- endif -%}
+{%- endfor -%}
+
+{%- comment -%} without the graph the strip shrinks and the grid takes the space {%- endcomment -%}
+{%- assign has_graph = false -%}
+{%- if temps and temps != empty and c_graph <= last_col -%}{%- assign has_graph = true -%}{%- endif -%}
+{%- assign wx_h = 58 -%}
+{%- if has_graph -%}{%- assign wx_h = 88 -%}{%- endif -%}
+
+{%- comment -%} ---------- fixed chrome, then whatever is left is the grid ---------- {%- endcomment -%}
+{%- assign is_24h = true -%}
+{%- if cal.time_format == "am/pm" -%}{%- assign is_24h = false -%}{%- endif -%}
+{%- comment -%} the gutter only has to hold its widest label: "23" or "12 PM" {%- endcomment -%}
+{%- assign gut = 66 -%}
+{%- if is_24h -%}{%- assign gut = 44 -%}{%- endif -%}
+{%- assign head_h = 30 -%}
+{%- assign body_px = screen_h | minus: wx_h | minus: head_h | minus: ad_px | minus: 4 -%}
+{%- if body_px < 120 -%}{%- assign body_px = 120 -%}{%- endif -%}
 
 {%- comment -%} ---------- vertical window: which hours to show ---------- {%- endcomment -%}
 {%- assign auto_from = 99 -%}
@@ -112,14 +218,15 @@
 {%- endfor -%}
 
 {%- assign h_from = -1 -%}
+{%- assign auto_win = false -%}
 {%- if cfg_from >= 0 -%}
   {%- assign h_from = cfg_from -%}
 {%- elsif cal.scroll_time and cal.scroll_time != "" -%}
   {%- assign h_from = cal.scroll_time | split: ":" | first | plus: 0 -%}
 {%- elsif auto_from < 99 -%}
-  {%- assign h_from = auto_from -%}
+  {%- assign h_from = auto_from -%}{%- assign auto_win = true -%}
 {%- else -%}
-  {%- assign h_from = 8 -%}
+  {%- assign h_from = 8 -%}{%- assign auto_win = true -%}
 {%- endif -%}
 
 {%- assign h_to = -1 -%}
@@ -134,6 +241,7 @@
   {%- assign h_to = auto_to -%}
 {%- else -%}
   {%- assign h_to = 18 -%}
+  {%- assign auto_win = true -%}
 {%- endif -%}
 
 {%- if h_from < 0 -%}{%- assign h_from = 0 -%}{%- endif -%}
@@ -146,17 +254,167 @@
   {%- if h_to > 24 -%}{%- assign h_to = 24 -%}{%- assign h_from = 18 -%}{%- endif -%}
   {%- assign hours = h_to | minus: h_from -%}
 {%- endif -%}
+
+{%- comment -%} ---------- cap the window so a row can still hold a label ----------
+  Rows below ~30px cannot carry a 16px hour label and a readable block, so one
+  06:00 or 23:00 outlier must not be allowed to crush the working day. When the
+  span is too long, keep the max_hours window holding the most events; anything
+  left outside is counted into the per-column edge badges.
+{%- endcomment -%}
+{%- assign max_hours = body_px | divided_by: 30 -%}
+{%- if max_hours > 14 -%}{%- assign max_hours = 14 -%}{%- endif -%}
+{%- if max_hours < 6 -%}{%- assign max_hours = 6 -%}{%- endif -%}
+{%- if hours > max_hours -%}
+  {%- assign best_from = h_from -%}
+  {%- assign best_n = -1 -%}
+  {%- assign latest_from = h_to | minus: max_hours -%}
+  {%- for cand in (0..23) -%}
+    {%- if cand >= h_from and cand <= latest_from -%}
+      {%- assign cand_end = cand | plus: max_hours -%}
+      {%- assign cand_n = 0 -%}
+      {%- for e in events -%}
+        {%- unless e.all_day -%}
+          {%- assign esh = e.start_full | date: "%H" | plus: 0 -%}
+          {%- if esh >= cand and esh < cand_end -%}{%- assign cand_n = cand_n | plus: 1 -%}{%- endif -%}
+        {%- endunless -%}
+      {%- endfor -%}
+      {%- if cand_n > best_n -%}{%- assign best_n = cand_n -%}{%- assign best_from = cand -%}{%- endif -%}
+    {%- endif -%}
+  {%- endfor -%}
+  {%- assign h_from = best_from -%}
+  {%- assign h_to = h_from | plus: max_hours -%}
+  {%- assign hours = max_hours -%}
+{%- endif -%}
+
+{%- comment -%} ---------- drop empty hours off the tail ----------
+  Only when the window was inferred: an explicit scroll_time or First/Last hour
+  is a request, not a guess. Without this, one event running past midnight keeps
+  the whole evening on screen and squeezes the hours that have anything in them.
+{%- endcomment -%}
+{%- if auto_win -%}
+  {%- assign tail = h_from -%}
+  {%- for e in events -%}
+    {%- unless e.all_day -%}
+      {%- assign esh = e.start_full | date: "%H" | plus: 0 -%}
+      {%- if esh >= h_from and esh < h_to -%}
+        {%- assign eeh = e.end_full | date: "%H" | plus: 0 -%}
+        {%- assign eem = e.end_full | date: "%M" | plus: 0 -%}
+        {%- if eem > 0 -%}{%- assign eeh = eeh | plus: 1 -%}{%- endif -%}
+        {%- assign esd = e.start_full | date: "%Y-%m-%d" -%}
+        {%- assign eed = e.end_full | date: "%Y-%m-%d" -%}
+        {%- if esd != eed -%}{%- assign eeh = h_to -%}{%- endif -%}
+        {%- if eeh > tail -%}{%- assign tail = eeh -%}{%- endif -%}
+      {%- endif -%}
+    {%- endunless -%}
+  {%- endfor -%}
+  {%- assign floor_to = h_from | plus: 6 -%}
+  {%- if tail < floor_to -%}{%- assign tail = floor_to -%}{%- endif -%}
+  {%- if tail < h_to -%}
+    {%- assign h_to = tail -%}
+    {%- assign hours = h_to | minus: h_from -%}
+  {%- endif -%}
+{%- endif -%}
 {%- assign win_start = h_from | times: 60 -%}
 {%- assign win_end = h_to | times: 60 -%}
 {%- assign win_span = win_end | minus: win_start -%}
 
-{%- comment -%} px per minute: decides how much text fits inside a block {%- endcomment -%}
-{%- assign body_px = 480 | minus: 46 | minus: 27 | minus: ad_px -%}
+{%- comment -%} ---------- block metrics: how much text fits ---------- {%- endcomment -%}
 {%- assign px_per_min = body_px | times: 1.0 | divided_by: win_span -%}
+{%- assign col_w = screen_w | minus: gut | divided_by: day_count -%}
 
-{%- assign is_24h = true -%}
-{%- if cal.time_format == "am/pm" -%}{%- assign is_24h = false -%}{%- endif -%}
+{%- comment -%} ---------- weather, normalised across providers ---------- {%- endcomment -%}
+{%- assign wx_now = wx.forecast.right_now -%}
+{%- assign wx_temp = wx.temperature -%}
+{%- unless wx_temp -%}{%- assign wx_temp = wx_now.temperature -%}{%- endunless -%}
+{%- assign wx_cond = wx.conditions -%}
+{%- unless wx_cond -%}{%- assign wx_cond = wx.right_now_conditions -%}{%- endunless -%}
+{%- unless wx_cond -%}{%- assign wx_cond = wx_now.conditions -%}{%- endunless -%}
 
+{%- comment -%} the hourly source owns the temperatures; the weather plugin owns the rest {%- endcomment -%}
+{%- assign temp_now = hourly.current_temp -%}
+{%- unless temp_now -%}{%- assign temp_now = wx_temp -%}{%- endunless -%}
+
+{%- comment -%} ---------- weather icons ----------
+  Providers disagree: TRMNL emits bare "wi-*" names, Tempest serves absolute
+  URLs to full-colour SVGs, OpenWeather uses codes like "01d". Colour art is
+  close to invisible once the panel quantises to four greys, so every value is
+  reduced to a slug and mapped onto TRMNL's mono wi-* set. Two icons share one
+  pass because Liquid has no functions.
+{%- endcomment -%}
+{%- assign raw_now = wx.weather_image -%}
+{%- unless raw_now and raw_now != "" -%}{%- assign raw_now = "none" -%}{%- endunless -%}
+{%- assign raw_tmrw = wx.tomorrow_weather_image -%}
+{%- unless raw_tmrw and raw_tmrw != "" -%}{%- assign raw_tmrw = "none" -%}{%- endunless -%}
+{%- assign raw_list = raw_now | append: "|" | append: raw_tmrw | split: "|" -%}
+
+{%- assign mapped = "" -%}
+{%- for raw in raw_list -%}
+  {%- assign slug = raw | split: "/" | last | split: "." | first | downcase -%}
+  {%- assign name = "" -%}
+
+  {%- comment -%} already one of ours {%- endcomment -%}
+  {%- if slug contains "wi-" -%}
+    {%- assign name = slug -%}
+  {%- else -%}
+    {%- comment -%} day or night? OpenWeather marks night with a trailing "n" {%- endcomment -%}
+    {%- assign night = false -%}
+    {%- if slug contains "night" or slug contains "nt-" -%}{%- assign night = true -%}{%- endif -%}
+    {%- assign slug_len = slug | size -%}
+    {%- if slug_len == 3 and slug contains "n" -%}{%- assign night = true -%}{%- endif -%}
+
+    {%- comment -%} OpenWeather numeric codes carry no words to match on {%- endcomment -%}
+    {%- if slug_len == 3 -%}
+      {%- assign code = slug | slice: 0, 2 -%}
+      {%- if code == "01" -%}{%- assign slug = "clear" -%}
+      {%- elsif code == "02" or code == "03" -%}{%- assign slug = "partly-cloudy" -%}
+      {%- elsif code == "04" -%}{%- assign slug = "overcast" -%}
+      {%- elsif code == "09" -%}{%- assign slug = "showers" -%}
+      {%- elsif code == "10" -%}{%- assign slug = "rain" -%}
+      {%- elsif code == "11" -%}{%- assign slug = "thunderstorm" -%}
+      {%- elsif code == "13" -%}{%- assign slug = "snow" -%}
+      {%- elsif code == "50" -%}{%- assign slug = "fog" -%}
+      {%- endif -%}
+    {%- endif -%}
+
+    {%- comment -%} most specific first: sleet before rain, thunder before shower {%- endcomment -%}
+    {%- if slug contains "thunder" or slug contains "storm" or slug contains "lightning" -%}
+      {%- if night -%}{%- assign name = "wi-night-alt-thunderstorm" -%}{%- else -%}{%- assign name = "wi-day-thunderstorm" -%}{%- endif -%}
+    {%- elsif slug contains "sleet" or slug contains "freezing" or slug contains "wintry" -%}
+      {%- if night -%}{%- assign name = "wi-night-alt-sleet" -%}{%- else -%}{%- assign name = "wi-day-sleet" -%}{%- endif -%}
+    {%- elsif slug contains "hail" -%}
+      {%- assign name = "wi-hail" -%}
+    {%- elsif slug contains "snow" or slug contains "flurr" or slug contains "blizzard" -%}
+      {%- if night -%}{%- assign name = "wi-night-alt-snow" -%}{%- else -%}{%- assign name = "wi-day-snow" -%}{%- endif -%}
+    {%- elsif slug contains "drizzle" or slug contains "sprinkle" -%}
+      {%- if night -%}{%- assign name = "wi-night-alt-sprinkle" -%}{%- else -%}{%- assign name = "wi-day-sprinkle" -%}{%- endif -%}
+    {%- elsif slug contains "shower" -%}
+      {%- if night -%}{%- assign name = "wi-night-alt-showers" -%}{%- else -%}{%- assign name = "wi-day-showers" -%}{%- endif -%}
+    {%- elsif slug contains "rain" -%}
+      {%- if night -%}{%- assign name = "wi-night-alt-rain" -%}{%- else -%}{%- assign name = "wi-day-rain" -%}{%- endif -%}
+    {%- elsif slug contains "fog" or slug contains "mist" or slug contains "haze" -%}
+      {%- assign name = "wi-fog" -%}
+    {%- elsif slug contains "wind" or slug contains "breez" -%}
+      {%- assign name = "wi-strong-wind" -%}
+    {%- elsif slug contains "partly" or slug contains "partial" or slug contains "few" or slug contains "scattered" or slug contains "mostly-clear" -%}
+      {%- if night -%}{%- assign name = "wi-night-alt-cloudy" -%}{%- else -%}{%- assign name = "wi-day-cloudy" -%}{%- endif -%}
+    {%- elsif slug contains "overcast" or slug contains "cloud" -%}
+      {%- assign name = "wi-cloudy" -%}
+    {%- elsif slug contains "clear" or slug contains "sunny" or slug contains "sun" or slug contains "fair" -%}
+      {%- if night -%}{%- assign name = "wi-night-clear" -%}{%- else -%}{%- assign name = "wi-day-sunny" -%}{%- endif -%}
+    {%- endif -%}
+  {%- endif -%}
+
+  {%- if raw == "none" or name == "" -%}{%- assign name = "wi-na" -%}{%- endif -%}
+  {%- assign mapped = mapped | append: name | append: "," -%}
+{%- endfor -%}
+{%- assign mapped = mapped | split: "," -%}
+
+{%- assign has_icon_now = false -%}
+{%- if raw_now != "none" -%}{%- assign has_icon_now = true -%}{%- endif -%}
+{%- assign has_icon_tmrw = false -%}
+{%- if raw_tmrw != "none" -%}{%- assign has_icon_tmrw = true -%}{%- endif -%}
+{%- assign icon_now = mapped[0] | prepend: "https://trmnl.com/images/plugins/weather/" | append: ".svg" -%}
+{%- assign icon_tmrw = mapped[1] | prepend: "https://trmnl.com/images/plugins/weather/" | append: ".svg" -%}
 <style>
   /* the platform wraps this markup in .view > .layout - take the whole screen */
   .view, .layout { padding: 0 !important; }
@@ -166,10 +424,13 @@
   .cw {
     --ink: var(--black, #000);
     --paper: var(--white, #fff);
-    --gut: 34px;
-    --wx-h: 46px;
-    --head-h: 27px;
+    --gut: {{ gut }}px;
+    --wx-h: {{ wx_h }}px;
+    --head-h: {{ head_h }}px;
     --ad-h: {{ ad_px }}px;
+    /* Greys come from the framework so they follow --framework-bit-depth: on a
+       2-bit panel these resolve to real grey levels, on 1-bit to dither tiles. */
+    --tile-size: var(--dither-bg-size, 16px 16px);
     display: flex;
     flex-direction: column;
     width: 100%;
@@ -177,36 +438,77 @@
     overflow: hidden;
     color: var(--ink);
     background: var(--paper);
+    image-rendering: pixelated;
   }
 
   /* ---------------- weather strip ---------------- */
+  /* same column track as the grid below, so "now" sits over today's column */
   .cw__wx {
     flex: 0 0 var(--wx-h);
-    display: flex;
-    align-items: center;
-    gap: 8px;
-    padding: 0 8px;
+    display: grid;
+    grid-template-columns: var(--gut) repeat({{ day_count }}, 1fr);
     border-bottom: 2px solid var(--ink);
     overflow: hidden;
   }
-  .cw__date { white-space: nowrap; }
-  .cw__wx-icon { width: 30px; height: 30px; flex: 0 0 auto; }
-  .cw__temp { white-space: nowrap; }
-  .cw__meta { display: flex; flex-direction: column; line-height: 1.15; overflow: hidden; }
-  .cw__meta span { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-  .cw__spacer { flex: 1 1 auto; }
-  .cw__fc {
-    flex: 0 0 auto;
+  .cw__wx-cell {
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    padding: 2px 5px;
+    overflow: hidden;
+    border-left: 1px dashed var(--ink);
+  }
+  .cw__wx-cell span { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .cw__wx-row {
     display: flex;
     align-items: center;
     gap: 5px;
-    padding-left: 8px;
+    min-width: 0;
+    min-height: 32px;   /* keeps both cells' captions on the same line */
+  }
+  .cw__wx-icon { width: 32px; height: 32px; flex: 0 0 auto; }
+  .cw__cap { display: flex; align-items: baseline; gap: 5px; min-width: 0; }
+  .cw__lo { font-weight: inherit; }
+
+  .cw__graph {
+    display: flex;
+    align-items: flex-end;
+    gap: 4px;
+    padding: 2px 10px;
+    min-width: 0;
+    overflow: hidden;
     border-left: 1px dashed var(--ink);
   }
-  .cw__fc-icon { width: 24px; height: 24px; }
-  .cw__fc-txt { display: flex; flex-direction: column; line-height: 1.15; }
-  .cw__fc-txt span { white-space: nowrap; }
-  .cw__hi { font-weight: 700; }
+  .cw__bar-col {
+    flex: 1 1 0;
+    min-width: 0;
+    height: 100%;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: flex-end;
+  }
+  .cw__bar-wrap { flex: 1 1 auto; width: 100%; display: flex; align-items: flex-end; justify-content: center; }
+  /* Height is temperature; fill is how sunny that hour is, lightest to darkest:
+     clear, partly cloudy, overcast, wet. The nearest hour is marked with a
+     heavier outline so the fill can stay a pure weather signal. */
+  .cw__pill {
+    width: 100%;
+    max-width: 26px;
+    border: 1px solid var(--ink);
+    border-radius: 999px;
+    background-size: var(--tile-size);
+  }
+  /* a ring, not a heavier border, so the marker still reads on a dark fill */
+  .cw__pill--near { outline: 1px solid var(--ink); outline-offset: 2px; }
+  /* The four fills a 2-bit panel renders flat, with no dither texture to muddy
+     them at this size: paper, #AAA, #555, ink. On 1-bit the middle two fall back
+     to the framework's tiles automatically. */
+  .cw__pill--s1 { background-color: var(--paper); }
+  .cw__pill--s2 { background-color: var(--bg-gray-55-color, #aaa); background-image: var(--bg-gray-55-image, none); }
+  .cw__pill--s3 { background-color: var(--bg-gray-30-color, #555); background-image: var(--bg-gray-30-image, none); }
+  .cw__pill--s4 { background-color: var(--ink); }
+  .cw__bar-col span { white-space: nowrap; }
 
   /* ---------------- calendar ---------------- */
   .cw__cal { flex: 1 1 auto; min-height: 0; display: flex; flex-direction: column; }
@@ -218,11 +520,13 @@
   .cw__ad   { flex: 0 0 var(--ad-h); border-bottom: 1px solid var(--ink); overflow: hidden; }
   .cw__body { flex: 1 1 auto; min-height: 0; position: relative; }
 
+  /* Headings stay ink-on-paper: a dither behind 12px type breaks up the glyphs,
+     so the weekend wash lives on the column and the all-day cell instead. */
   .cw__hcell {
     display: flex;
     align-items: center;
     justify-content: center;
-    gap: 4px;
+    gap: 5px;
     overflow: hidden;
     border-left: 1px dashed var(--ink);
   }
@@ -230,12 +534,27 @@
   .cw__dow { text-transform: uppercase; }
 
   .cw__gut { position: relative; overflow: hidden; }
-  .cw__hr { position: absolute; right: 5px; white-space: nowrap; }
+  /* Centred on the hour line, not hanging below it, with a tick running into the
+     grid so it is unambiguous which line a label belongs to. */
+  .cw__hr {
+    position: absolute;
+    right: 13px;
+    white-space: nowrap;
+    transform: translateY(-50%);
+  }
+  .cw__hr--first { transform: none; }
+  .cw__tick {
+    position: absolute;
+    right: 0;
+    width: 9px;
+    height: 0;
+    border-top: 1px solid var(--ink);
+  }
   .cw__ad-gut, .cw__gut-head {
     display: flex;
     align-items: center;
     justify-content: flex-end;
-    padding-right: 5px;
+    padding-right: 6px;
   }
   .cw__ad-gut span, .cw__gut-head span { white-space: nowrap; }
 
@@ -246,25 +565,67 @@
     background-image: linear-gradient(to bottom, var(--ink) 0, var(--ink) 1px, transparent 1px);
     background-size: 100% calc(100% / {{ hours }});
   }
+  .cw__col--we {
+    background-color: var(--bg-gray-70-color, #fff);
+    background-image:
+      linear-gradient(to bottom, var(--ink) 0, var(--ink) 1px, transparent 1px),
+      var(--bg-gray-70-image, none);
+    background-size: 100% calc(100% / {{ hours }}), var(--tile-size);
+  }
   .cw__adcol {
     position: relative;
     padding: 1px;
     overflow: hidden;
     border-left: 1px dashed var(--ink);
   }
+  .cw__adcol--we {
+    background-color: var(--bg-gray-70-color, #fff);
+    background-image: var(--bg-gray-70-image, none);
+    background-size: var(--tile-size);
+  }
 
+  /* ---------------- event blocks ----------------
+     Three widths. A block narrower than ~44px cannot hold a legible word, so it
+     drops the title and becomes a solid marker rather than printing "Regi da...".
+     min-height clears the border box of a 12px line so short events are not
+     shaved off at the baseline. */
   .cw__ev {
     position: absolute;
     box-sizing: border-box;
-    min-height: 13px;
-    padding: 0 2px 0 3px;
+    min-height: 16px;
+    padding: 1px 3px 1px 9px;
     overflow: hidden;
     background: var(--paper);
     color: var(--ink);
     border: 1px solid var(--ink);
-    border-left: 4px solid var(--ink);
   }
+  .cw__ev--narrow { padding: 1px 2px 1px 6px; }
+  .cw__ev--sliver { min-height: 6px; padding: 0; }
   .cw__ev--live { background: var(--ink); color: var(--paper); }
+  .cw__ev--off { border-style: dashed; }
+
+  /* one grey per calendar colour, as a dithered edge bar */
+  .cw__edge {
+    position: absolute;
+    left: 0;
+    top: 0;
+    bottom: 0;
+    width: 5px;
+    background-color: var(--ink);
+    background-size: var(--tile-size);
+  }
+  .cw__ev--narrow .cw__edge { width: 3px; }
+  .cw__ev--sliver .cw__edge { width: 100%; }
+  .cw__edge--t1 { background-color: var(--bg-gray-20-color, #555); background-image: var(--bg-gray-20-image, none); }
+  .cw__edge--t2 { background-color: var(--bg-gray-40-color, #aaa); background-image: var(--bg-gray-40-image, none); }
+  .cw__edge--t3 { background-color: var(--bg-gray-60-color, #ddd); background-image: var(--bg-gray-60-image, none); }
+  .cw__ev--live .cw__edge { background-color: var(--paper); background-image: none; }
+  /* a sliver is all edge bar - whitening it would invert the block, not mark it */
+  .cw__ev--sliver.cw__ev--live .cw__edge { display: none; }
+  /* pin the leading so a label is exactly its font size tall - that is what
+     lets a 30-minute block carry one line without shaving the descenders */
+  .cw .cw__ev .cw__ev-txt,
+  .cw .cw__ev .cw__ev-where { line-height: 1; }
   .cw__ev-txt { display: block; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
   .cw__ev-txt--clamp {
     display: -webkit-box;
@@ -273,29 +634,22 @@
     white-space: normal;
     text-overflow: clip;
   }
-  .cw__ev-when { display: block; white-space: nowrap; overflow: hidden; }
-  .cw__ev-desc { display: block; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .cw__ev-where { display: block; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 
+  /* Outlined, not inverted: inversion is reserved for today and in-progress, and
+     paper-on-ink at 12px is the weakest thing an eInk panel can render. */
   .cw__chip {
     display: block;
-    height: 16px;
+    height: 18px;
     margin-bottom: 1px;
     padding: 0 3px;
     overflow: hidden;
     white-space: nowrap;
     text-overflow: ellipsis;
-    background: var(--ink);
-    color: var(--paper);
-  }
-  .cw__more { display: block; height: 16px; padding: 0 3px; white-space: nowrap; }
-  .cw__spill {
-    position: absolute;
-    right: 1px;
-    bottom: 1px;
-    padding: 0 2px;
     background: var(--paper);
     border: 1px solid var(--ink);
   }
+  .cw__more { display: block; height: 18px; padding: 0 3px; white-space: nowrap; }
 
   .cw__now { position: absolute; left: -1px; right: 0; height: 0; border-top: 2px solid var(--ink); }
   .cw__now::before {
@@ -303,86 +657,106 @@
     position: absolute;
     top: -4px;
     left: 0;
-    width: 6px;
-    height: 6px;
+    width: 7px;
+    height: 7px;
     background: var(--ink);
+  }
+
+  /* counts for what is not drawn: above the window, below it, or too deeply
+     stacked to fit a lane. Inverted so they read as a badge over a block. */
+  .cw__badge {
+    position: absolute;
+    right: 0;
+    padding: 0 3px;
+    background: var(--ink);
+    color: var(--paper);
+    outline: 1px solid var(--paper);
+  }
+  .cw__badge--post { bottom: 0; }
+  .cw__hcell-badge {
+    padding: 0 3px;
+    border: 1px solid currentColor;
   }
 
   .cw__empty {
     position: absolute;
-    top: 0;
-    left: 0;
-    right: 0;
-    bottom: 0;
+    top: 0; left: 0; right: 0; bottom: 0;
     display: flex;
     align-items: center;
     justify-content: center;
   }
-  .cw__empty span {
-    padding: 6px 12px;
-    background: var(--paper);
-    border: 1px solid var(--ink);
-  }
+  .cw__empty span { padding: 6px 12px; background: var(--paper); border: 1px solid var(--ink); }
   .cw__setup { padding: 24px 30px; }
-  .cw__setup p { margin: 0 0 6px 0; }
-  .cw__setup code { font-weight: 700; }
+  .cw__setup p { margin: 0 0 8px 0; }
 </style>
-
 <div class="cw">
 
   {%- comment -%} ============ weather strip ============ {%- endcomment -%}
   <div class="cw__wx">
-    <span class="cw__date text--base">{{ base_noon | date: "%a" }} {{ base_noon | date: "%d" | plus: 0 }} {{ base_noon | date: "%b" }}</span>
-    {%- unless wx -%}
-      <span class="text--small">No weather source - pick one in this plugin's settings.</span>
-    {%- else -%}
-      {%- comment -%} icon names come from the plugin; Tempest sends full URLs instead {%- endcomment -%}
-      {%- assign icon_now = wx.weather_image -%}
-      {%- unless icon_now contains "http" -%}
-        {%- assign icon_now = icon_now | prepend: "https://trmnl.com/images/plugins/weather/" | append: ".svg" -%}
-      {%- endunless -%}
-      {%- assign icon_today = wx.today_weather_image -%}
-      {%- unless icon_today contains "http" -%}
-        {%- assign icon_today = icon_today | prepend: "https://trmnl.com/images/plugins/weather/" | append: ".svg" -%}
-      {%- endunless -%}
-      {%- assign icon_tmrw = wx.tomorrow_weather_image -%}
-      {%- unless icon_tmrw contains "http" -%}
-        {%- assign icon_tmrw = icon_tmrw | prepend: "https://trmnl.com/images/plugins/weather/" | append: ".svg" -%}
-      {%- endunless -%}
-      {%- if wx.weather_image and wx.weather_image != "" -%}
-        <img class="cw__wx-icon image image--adaptive" src="{{ icon_now }}" alt="" />
-      {%- endif -%}
-      <span class="cw__temp text--large">{{ wx.temperature | round }}&deg;</span>
-      <div class="cw__meta">
-        <span class="text--small">{{ wx.conditions }}</span>
-        <span class="text--small">Feels {{ wx.feels_like | round }}&deg; &middot; {{ wx.humidity }}% RH</span>
+    {%- if wx or temp_now -%}
+      <div class="cw__wx-cell" style="grid-column:{{ c_now }}">
+        <div class="cw__wx-row">
+          {%- if has_icon_now -%}
+            <img class="cw__wx-icon image image--adaptive" src="{{ icon_now }}" alt="" />
+          {%- endif -%}
+          <span class="text--large">{{ temp_now | round }}&deg;</span>
+        </div>
+        {%- if wx_cond and wx_cond != "" -%}
+          <span class="text--small">{{ wx_cond }}</span>
+        {%- endif -%}
       </div>
-      <div class="cw__spacer"></div>
-      {%- assign fc_today = wx.forecast.today -%}
-      {%- if fc_today -%}
-        <div class="cw__fc">
-          {%- if wx.today_weather_image and wx.today_weather_image != "" -%}
-            <img class="cw__fc-icon image image--adaptive" src="{{ icon_today }}" alt="" />
-          {%- endif -%}
-          <div class="cw__fc-txt">
-            <span class="text--small"><span class="cw__hi">{{ fc_today.maxtemp | round }}&deg;</span> / {{ fc_today.mintemp | round }}&deg;</span>
-            <span class="text--small">{% if fc_today.day_override and fc_today.day_override != "" %}{{ fc_today.day_override }}{% else %}Today{% endif %}</span>
-          </div>
-        </div>
-      {%- endif -%}
+
       {%- assign fc_tmrw = wx.forecast.tomorrow -%}
-      {%- if fc_tmrw -%}
-        <div class="cw__fc">
-          {%- if wx.tomorrow_weather_image and wx.tomorrow_weather_image != "" -%}
-            <img class="cw__fc-icon image image--adaptive" src="{{ icon_tmrw }}" alt="" />
-          {%- endif -%}
-          <div class="cw__fc-txt">
-            <span class="text--small"><span class="cw__hi">{{ fc_tmrw.maxtemp | round }}&deg;</span> / {{ fc_tmrw.mintemp | round }}&deg;</span>
-            <span class="text--small">{% if fc_tmrw.day_override and fc_tmrw.day_override != "" %}{{ fc_tmrw.day_override }}{% else %}Tomorrow{% endif %}</span>
+      {%- if fc_tmrw and c_tmrw <= last_col -%}
+        <div class="cw__wx-cell" style="grid-column:{{ c_tmrw }}">
+          <div class="cw__wx-row">
+            {%- if has_icon_tmrw -%}
+              <img class="cw__wx-icon image image--adaptive" src="{{ icon_tmrw }}" alt="" />
+            {%- endif -%}
+            <span class="text--large">{{ fc_tmrw.maxtemp | round }}&deg;</span>
           </div>
+          <span class="cw__cap text--small">{% if fc_tmrw.day_override and fc_tmrw.day_override != "" %}{{ fc_tmrw.day_override }}{% else %}Tomorrow{% endif %}<b class="cw__lo">{{ fc_tmrw.mintemp | round }}&deg;</b></span>
         </div>
       {%- endif -%}
-    {%- endunless -%}
+    {%- else -%}
+      <div class="cw__wx-cell" style="grid-column:{{ c_now }}">
+        <span class="text--small">No weather source selected</span>
+      </div>
+    {%- endif -%}
+
+    {%- if has_graph -%}
+      <div class="cw__graph" style="grid-column:{{ c_graph }} / -1">
+        {%- for t in temps -%}
+          {%- assign v = t | first -%}
+          {%- unless v -%}{%- assign v = t -%}{%- endunless -%}
+          {%- assign vr = v | round -%}
+          {%- assign bar = vr | minus: t_min | times: 66.0 | divided_by: t_span | plus: 34 -%}
+          {%- comment -%} sunshine level from that hour's own icon, 1 clear to 4 wet {%- endcomment -%}
+          {%- assign wi = hourly.weather_icons[forloop.index0] -%}
+          {%- assign wislug = "" -%}
+          {%- if wi and wi != "" -%}
+            {%- assign wislug = wi | split: "/" | last | split: "." | first | downcase -%}
+          {%- endif -%}
+          {%- assign sun = 2 -%}
+          {%- if wislug contains "rain" or wislug contains "shower" or wislug contains "storm" or wislug contains "thunder" or wislug contains "snow" or wislug contains "sleet" or wislug contains "hail" or wislug contains "drizzle" or wislug contains "sprinkle" -%}
+            {%- assign sun = 4 -%}
+          {%- elsif wislug contains "partly" or wislug contains "day-cloudy" or wislug contains "alt-cloudy" -%}
+            {%- assign sun = 2 -%}
+          {%- elsif wislug contains "cloud" or wislug contains "overcast" or wislug contains "fog" or wislug contains "haze" -%}
+            {%- assign sun = 3 -%}
+          {%- elsif wislug contains "sunny" or wislug contains "clear" -%}
+            {%- assign sun = 1 -%}
+          {%- endif -%}
+          <div class="cw__bar-col">
+            <span class="text--small">{{ vr }}&deg;</span>
+            <div class="cw__bar-wrap">
+              <div class="cw__pill cw__pill--s{{ sun }}{% if forloop.index0 == near_i %} cw__pill--near{% endif %}" style="height:{{ bar | round: 1 }}%"></div>
+            </div>
+            <span class="text--small">{{ hourly.timestamps_formatted[forloop.index0] }}</span>
+          </div>
+        {%- endfor -%}
+      </div>
+    {%- endif -%}
   </div>
 
   {%- unless cal -%}
@@ -390,9 +764,9 @@
     <div class="cw__cal">
       <div class="cw__setup">
         <p class="text--base">No calendar source selected.</p>
-        <p class="text--small">Open this plugin's settings and choose your calendar and weather
-          instances, or edit the two fallback merge variables at the top of the markup
-          (see the Merge Variables dropdown for their names).</p>
+        <p class="text--small">Open this plugin's settings and choose your calendar, weather and
+          (optionally) hourly weather instances, or edit the fallback merge variables at the top
+          of the markup - their names are in the Merge Variables dropdown.</p>
         <p class="text--small">Both source plugins must sit on a playlist - hidden is fine - or their data never refreshes.</p>
       </div>
     </div>
@@ -408,9 +782,30 @@
         {%- assign off = n | minus: 1 | times: 86400 -%}
         {%- assign day_noon = base_noon | plus: off -%}
         {%- assign day_key = day_noon | date: "%Y-%m-%d" -%}
-        <div class="cw__hcell{% if day_key == today %} cw__hcell--today{% endif %}">
+        {%- comment -%} events outside the visible hours are counted here rather
+          than in the column, where the badge would sit on top of a block {%- endcomment -%}
+        {%- assign out_n = 0 -%}
+        {%- for e in events -%}
+          {%- unless e.all_day -%}
+            {%- assign esd = e.start_full | date: "%Y-%m-%d" -%}
+            {%- if esd == day_key -%}
+              {%- assign osmin = e.start_full | date: "%H" | plus: 0 | times: 60 -%}
+              {%- assign osm = e.start_full | date: "%M" | plus: 0 -%}
+              {%- assign osmin = osmin | plus: osm -%}
+              {%- assign oemin = e.end_full | date: "%H" | plus: 0 | times: 60 -%}
+              {%- assign oem = e.end_full | date: "%M" | plus: 0 -%}
+              {%- assign oemin = oemin | plus: oem -%}
+              {%- assign oed = e.end_full | date: "%Y-%m-%d" -%}
+              {%- if oed != esd -%}{%- assign oemin = 1440 -%}{%- endif -%}
+              {%- if oemin <= osmin -%}{%- assign oemin = osmin | plus: 30 -%}{%- endif -%}
+              {%- if oemin <= win_start or osmin >= win_end -%}{%- assign out_n = out_n | plus: 1 -%}{%- endif -%}
+            {%- endif -%}
+          {%- endunless -%}
+        {%- endfor -%}
+        <div class="cw__hcell{% if day_key == today and highlight_today %} cw__hcell--today{% endif %}">
           <span class="cw__dow text--small">{{ day_noon | date: "%a" }}</span>
           <span class="text--base">{{ day_noon | date: "%d" | plus: 0 }}</span>
+          {%- if out_n > 0 -%}<span class="cw__hcell-badge text--small">+{{ out_n }}</span>{%- endif -%}
         </div>
       {%- endfor -%}
     </div>
@@ -422,7 +817,12 @@
         {%- for n in (1..day_count) -%}
           {%- assign off = n | minus: 1 | times: 86400 -%}
           {%- assign day_noon = base_noon | plus: off -%}
-          <div class="cw__adcol">
+          {%- assign dow = day_noon | date: "%w" | plus: 0 -%}
+          {%- assign weekend = false -%}
+          {%- if dow == 0 or dow == 6 -%}
+            {%- if shade_weekends -%}{%- assign weekend = true -%}{%- endif -%}
+          {%- endif -%}
+          <div class="cw__adcol{% if weekend %} cw__adcol--we{% endif %}">
             {%- comment -%} count first, so the last row can become "+N more" {%- endcomment -%}
             {%- assign ad_n = 0 -%}
             {%- for e in events -%}
@@ -461,13 +861,14 @@
         {%- for n in (1..hours) -%}
           {%- assign hh = h_from | plus: n | minus: 1 -%}
           {%- assign top = n | minus: 1 | times: 100.0 | divided_by: hours -%}
-          <span class="cw__hr text--small" style="top:{{ top | round: 3 }}%">
+          <i class="cw__tick" style="top:{{ top | round: 3 }}%"></i>
+          <span class="cw__hr{% if forloop.first %} cw__hr--first{% endif %} text--base" style="top:{{ top | round: 3 }}%">
             {%- if is_24h -%}
               {{ hh | prepend: "0" | slice: -2, 2 }}
             {%- else -%}
               {%- assign h12 = hh | modulo: 12 -%}
               {%- if h12 == 0 -%}{%- assign h12 = 12 -%}{%- endif -%}
-              {{ h12 }}{% if hh < 12 %}a{% else %}p{% endif %}
+              {{ h12 }} {% if hh < 12 %}AM{% else %}PM{% endif %}
             {%- endif -%}
           </span>
         {%- endfor -%}
@@ -477,12 +878,19 @@
         {%- assign off = n | minus: 1 | times: 86400 -%}
         {%- assign day_noon = base_noon | plus: off -%}
         {%- assign day_key = day_noon | date: "%Y-%m-%d" -%}
+        {%- assign dow = day_noon | date: "%w" | plus: 0 -%}
+        {%- assign weekend = false -%}
+        {%- if dow == 0 or dow == 6 -%}
+          {%- if shade_weekends -%}{%- assign weekend = true -%}{%- endif -%}
+        {%- endif -%}
 
-        <div class="cw__col">
+        <div class="cw__col{% if weekend %} cw__col--we{% endif %}">
           {%- comment -%}
-            Events are laid out like Google Calendar: greedy left-to-right lanes,
-            each block only as narrow as the events it actually collides with.
-            l0/l1/l2 hold the end minute of the event currently in each lane.
+            Google-Calendar-style lanes: greedy left to right, each block only as
+            narrow as the events it actually collides with. l0/l1/l2 hold the end
+            minute of the event currently occupying each lane. Events wholly
+            outside the visible window are counted, not drawn - clamping them to
+            the edge used to pile them up on the first row.
           {%- endcomment -%}
           {%- assign l0 = -1 -%}{%- assign l1 = -1 -%}{%- assign l2 = -1 -%}
           {%- assign spill = 0 -%}
@@ -500,6 +908,10 @@
                 {%- if ed != sd -%}{%- assign emin = 1440 -%}{%- endif -%}
                 {%- if emin <= smin -%}{%- assign emin = smin | plus: 30 -%}{%- endif -%}
 
+                {%- if emin <= win_start or smin >= win_end -%}
+                  {%- comment -%} outside the window: counted in the day heading {%- endcomment -%}
+                {%- else -%}
+
                 {%- assign lane = -1 -%}
                 {%- if smin >= l0 -%}
                   {%- assign lane = 0 -%}{%- assign l0 = emin -%}
@@ -508,75 +920,111 @@
                 {%- elsif smin >= l2 -%}
                   {%- assign lane = 2 -%}{%- assign l2 = emin -%}
                 {%- else -%}
-                  {%- comment -%} four-deep: no lane left, count it instead of drawing over another block {%- endcomment -%}
+                  {%- comment -%} four deep: count it rather than draw over another block {%- endcomment -%}
                   {%- assign spill = spill | plus: 1 -%}
                 {%- endif -%}
+
                 {%- if lane >= 0 -%}
+                  {%- comment -%} how many visible events share this slot? that sets the width {%- endcomment -%}
+                  {%- assign ovl = 0 -%}
+                  {%- for o in events -%}
+                    {%- unless o.all_day -%}
+                      {%- assign osd = o.start_full | date: "%Y-%m-%d" -%}
+                      {%- if osd == day_key -%}
+                        {%- assign osmin = o.start_full | date: "%H" | plus: 0 | times: 60 -%}
+                        {%- assign osm = o.start_full | date: "%M" | plus: 0 -%}
+                        {%- assign osmin = osmin | plus: osm -%}
+                        {%- assign oemin = o.end_full | date: "%H" | plus: 0 | times: 60 -%}
+                        {%- assign oem = o.end_full | date: "%M" | plus: 0 -%}
+                        {%- assign oemin = oemin | plus: oem -%}
+                        {%- assign oed = o.end_full | date: "%Y-%m-%d" -%}
+                        {%- if oed != osd -%}{%- assign oemin = 1440 -%}{%- endif -%}
+                        {%- if oemin <= osmin -%}{%- assign oemin = osmin | plus: 30 -%}{%- endif -%}
+                        {%- if oemin > win_start and osmin < win_end -%}
+                          {%- if osmin < emin and oemin > smin -%}{%- assign ovl = ovl | plus: 1 -%}{%- endif -%}
+                        {%- endif -%}
+                      {%- endif -%}
+                    {%- endunless -%}
+                  {%- endfor -%}
+                  {%- if ovl < 1 -%}{%- assign ovl = 1 -%}{%- endif -%}
+                  {%- if ovl > 3 -%}{%- assign ovl = 3 -%}{%- endif -%}
+                  {%- if lane >= ovl -%}{%- assign lane = ovl | minus: 1 -%}{%- endif -%}
+                  {%- assign lane_w = 100.0 | divided_by: ovl -%}
+                  {%- assign lane_px = col_w | divided_by: ovl -%}
 
-                {%- comment -%} how many events share this slot? that sets the width {%- endcomment -%}
-                {%- assign ovl = 0 -%}
-                {%- for o in events -%}
-                  {%- unless o.all_day -%}
-                    {%- assign osd = o.start_full | date: "%Y-%m-%d" -%}
-                    {%- if osd == day_key -%}
-                      {%- assign osmin = o.start_full | date: "%H" | plus: 0 | times: 60 -%}
-                      {%- assign osm = o.start_full | date: "%M" | plus: 0 -%}
-                      {%- assign osmin = osmin | plus: osm -%}
-                      {%- assign oemin = o.end_full | date: "%H" | plus: 0 | times: 60 -%}
-                      {%- assign oem = o.end_full | date: "%M" | plus: 0 -%}
-                      {%- assign oemin = oemin | plus: oem -%}
-                      {%- assign oed = o.end_full | date: "%Y-%m-%d" -%}
-                      {%- if oed != osd -%}{%- assign oemin = 1440 -%}{%- endif -%}
-                      {%- if oemin <= osmin -%}{%- assign oemin = osmin | plus: 30 -%}{%- endif -%}
-                      {%- if osmin < emin and oemin > smin -%}{%- assign ovl = ovl | plus: 1 -%}{%- endif -%}
-                    {%- endif -%}
-                  {%- endunless -%}
-                {%- endfor -%}
-                {%- if ovl < 1 -%}{%- assign ovl = 1 -%}{%- endif -%}
-                {%- if ovl > 3 -%}{%- assign ovl = 3 -%}{%- endif -%}
-                {%- if lane >= ovl -%}{%- assign lane = ovl | minus: 1 -%}{%- endif -%}
-                {%- assign lane_w = 100.0 | divided_by: ovl -%}
+                  {%- comment -%} clamp into the visible window {%- endcomment -%}
+                  {%- assign vs = smin -%}
+                  {%- if vs < win_start -%}{%- assign vs = win_start -%}{%- endif -%}
+                  {%- assign ve = emin -%}
+                  {%- if ve > win_end -%}{%- assign ve = win_end -%}{%- endif -%}
+                  {%- assign dur = ve | minus: vs -%}
 
-                {%- comment -%} clamp into the visible window {%- endcomment -%}
-                {%- assign vs = smin -%}
-                {%- if vs < win_start -%}{%- assign vs = win_start -%}{%- endif -%}
-                {%- if vs > win_end -%}{%- assign vs = win_end -%}{%- endif -%}
-                {%- assign ve = emin -%}
-                {%- if ve > win_end -%}{%- assign ve = win_end -%}{%- endif -%}
-                {%- if ve < vs -%}{%- assign ve = vs -%}{%- endif -%}
-                {%- assign dur = ve | minus: vs -%}
+                  {%- assign top = vs | minus: win_start | times: 100.0 | divided_by: win_span -%}
+                  {%- assign hgt = dur | times: 100.0 | divided_by: win_span -%}
+                  {%- assign left = lane | times: lane_w -%}
+                  {%- assign px = dur | times: px_per_min -%}
 
-                {%- assign top = vs | minus: win_start | times: 100.0 | divided_by: win_span -%}
-                {%- assign hgt = dur | times: 100.0 | divided_by: win_span -%}
-                {%- assign left = lane | times: lane_w -%}
-                {%- assign px = dur | times: px_per_min -%}
-
-                {%- assign live = false -%}
-                {%- if day_key == now_date and now_min >= smin and now_min < emin -%}{%- assign live = true -%}{%- endif -%}
-
-                <div class="cw__ev{% if live %} cw__ev--live{% endif %}"
-                     style="top:{{ top | round: 3 }}%;height:{{ hgt | round: 3 }}%;left:{{ left | round: 3 }}%;width:{{ lane_w | round: 3 }}%">
-                  {%- if px >= 27 and ovl < 3 -%}
-                    <span class="cw__ev-when text--small">{% if e.start and e.start != "" %}{{ e.start }}{% else %}{{ e.start_full | date: "%H:%M" }}{% endif %}</span>
-                    <span class="cw__ev-txt{% if px >= 40 %} cw__ev-txt--clamp{% endif %} text--small">{{ e.summary }}</span>
-                    {%- if cal.include_description and e.description and e.description != "" and px >= 66 -%}
-                      <span class="cw__ev-desc text--small">{{ e.description | strip_html | truncate: 60 }}</span>
-                    {%- endif -%}
-                  {%- else -%}
-                    {%- comment -%} too short or too narrow for a time line: title only {%- endcomment -%}
-                    <span class="cw__ev-txt text--small">{{ e.summary }}</span>
+                  {%- comment -%} grey tone for this event's calendar colour {%- endcomment -%}
+                  {%- assign tone = 0 -%}
+                  {%- if colorize and e.background_color -%}
+                    {%- for c in palette -%}
+                      {%- if c == e.background_color -%}
+                        {%- assign tone = forloop.index0 | modulo: 4 -%}
+                      {%- endif -%}
+                    {%- endfor -%}
                   {%- endif -%}
-                </div>
+
+                  {%- assign live = false -%}
+                  {%- if day_key == today and now_min >= smin and now_min < emin -%}{%- assign live = true -%}{%- endif -%}
+
+                  {%- assign off_event = false -%}
+                  {%- if e.summary contains "Cancel" -%}{%- assign off_event = true -%}{%- endif -%}
+
+                  {%- comment -%} width decides how much of a title is worth printing {%- endcomment -%}
+                  {%- assign fit = "wide" -%}
+                  {%- if lane_px < 44 -%}
+                    {%- assign fit = "sliver" -%}
+                  {%- elsif lane_px < 70 -%}
+                    {%- assign fit = "narrow" -%}
+                  {%- endif -%}
+
+                  <div class="cw__ev cw__ev--{{ fit }}{% if live %} cw__ev--live{% endif %}{% if off_event %} cw__ev--off{% endif %}"
+                       style="top:{{ top | round: 3 }}%;height:{{ hgt | round: 3 }}%;left:{{ left | round: 3 }}%;width:{{ lane_w | round: 3 }}%">
+                    <i class="cw__edge{% if tone > 0 %} cw__edge--t{{ tone }}{% endif %}"></i>
+                    {%- comment -%} no time inside the block - the hour gutter carries it {%- endcomment -%}
+                    {%- unless fit == "sliver" -%}
+                      {%- assign where = "" -%}
+                      {%- if fit == "wide" and px >= 30 and ovl == 1 and e.location and e.location != "" -%}
+                        {%- unless e.location contains "Teams" or e.location contains "Zoom" or e.location contains "http" -%}
+                          {%- assign where = e.location | split: "," | first -%}
+                        {%- endunless -%}
+                      {%- endif -%}
+                      {%- comment -%}
+                        One size for every event label: 12px. The framework's
+                        pixel fonts only come at 12/16/21, so this is one step
+                        down from 16 - it buys roughly twice the characters per
+                        line, which is what narrow and overlapping blocks need.
+                      {%- endcomment -%}
+                      {%- assign clamp = false -%}
+                      {%- if where == "" and px >= 28 -%}{%- assign clamp = true -%}{%- endif -%}
+                      <span class="cw__ev-txt{% if clamp %} cw__ev-txt--clamp{% endif %} text--small">{{ e.summary }}</span>
+                      {%- if where != "" -%}
+                        <span class="cw__ev-where text--small">{{ where }}</span>
+                      {%- endif -%}
+                    {%- endunless -%}
+                  </div>
+                {%- endif -%}
+
                 {%- endif -%}
               {%- endif -%}
             {%- endunless -%}
           {%- endfor -%}
 
           {%- if spill > 0 -%}
-            <span class="cw__spill text--small">+{{ spill }}</span>
+            <span class="cw__badge cw__badge--post text--small">+{{ spill }}</span>
           {%- endif -%}
 
-          {%- if day_key == now_date and now_min >= win_start and now_min <= win_end -%}
+          {%- if show_now and day_key == today and now_min >= win_start and now_min <= win_end -%}
             {%- assign now_top = now_min | minus: win_start | times: 100.0 | divided_by: win_span -%}
             <div class="cw__now" style="top:{{ now_top | round: 3 }}%"></div>
           {%- endif -%}
@@ -584,7 +1032,7 @@
       {%- endfor -%}
 
       {%- if events == empty -%}
-        <div class="cw__empty"><span class="text--base">Nothing scheduled{% if cal.events %} - no events could be read from the calendar payload{% endif %}</span></div>
+        <div class="cw__empty"><span class="text--base">Nothing scheduled</span></div>
       {%- endif -%}
     </div>
   </div>

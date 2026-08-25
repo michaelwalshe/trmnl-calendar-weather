@@ -1,12 +1,17 @@
 ---
 # Local dev-server config for `trmnlp serve`. Not uploaded to TRMNL.
 #
-# The `variables` block below stands in for the Plugin Merge payload: two nodes
-# named the way TRMNL names them, <plugin_keyname>_<plugin_setting_id>. Rename
-# them here and in src/full.liquid to match your own plugin instances.
+# The `variables` block stands in for the Plugin Merge payload: three nodes named
+# the way TRMNL names them, <plugin_keyname>_<plugin_setting_id>. The shapes here
+# mirror real payloads - calendar events carry background_color and location,
+# today_in_tz is a full timestamp with an offset, weather icons are absolute URLs
+# (Tempest), and the hourly node nests its values under `data`.
 #
-# Dates are anchored to today_in_tz, which the template uses as day one of the
-# rolling week, so this sample renders a full week whatever the real date is.
+# Sample events are invented. Do not paste real calendar data into this file:
+# the repository is public.
+#
+# Everything is anchored to today_in_tz, which the template treats as day one of
+# the rolling week, so this renders a full week whatever the real date is.
 
 watch:
   - src
@@ -19,184 +24,304 @@ custom_fields:
   week_start: "rolling"
   hour_from: ""
   hour_to: ""
+  now_line: "yes"
 
 variables:
   trmnl:
     user:
       name: Sample User
-      utc_offset: 3600
+      utc_offset: 0          # accounts with no time zone set report 0
+    system:
+      # Pinned so previews are reproducible - without it the render (and the
+      # committed PNGs) drift with the wall clock.
+      timestamp_utc: 1787564400   # 2026-08-24 09:40 UTC = 10:40 +01:00
     plugin_settings:
-      instance_name: Week + Weather
+      instance_name: Week and Weather
 
   google_calendar_12345:
-    today_in_tz: "2026-08-24"
-    event_layout: week
+    tz: Europe/London
+    today_in_tz: "2026-08-24T00:00:00.000+01:00"
+    event_layout: rolling_week
     first_day: 1
-    time_format: "24h"
+    time_format: "am/pm"
+    date_format: short
+    scroll_time: "09:00:00"
+    scroll_time_end: "21:00:00"
     include_description: false
     include_event_time: true
-    scroll_time: "08:00:00"
-    scroll_time_end: "20:30:00"
+    shade_weekends: true
+    colorize_events: true
+    highlight_today: true
     events:
-      - summary: "Stand-up"
+      - summary: "Visitors staying"
+        all_day: true
+        status: confirmed
+        start_full: "2026-08-22"
+        end_full: "2026-08-25"
+        location: null
         description: ""
+        background_color: "#a47ae2"
+      - summary: "Resourcing meeting"
+        all_day: false
         status: confirmed
-        start_full: "2026-08-24T09:00:00.000+01:00"
-        end_full: "2026-08-24T09:15:00.000+01:00"
-        start: "09:00"
-        end: "09:15"
-      - summary: "Client workshop - platform discovery"
-        description: "Session two of three."
+        start: "11:30 AM"
+        end: "12:00 PM"
+        start_full: "2026-08-24T11:30:00.000+01:00"
+        end_full: "2026-08-24T12:00:00.000+01:00"
+        location: "Microsoft Teams Meeting"
+        background_color: "#4986e7"
+      - summary: "Weekly catch-up"
+        all_day: false
         status: confirmed
-        start_full: "2026-08-24T10:00:00.000+01:00"
-        end_full: "2026-08-24T11:30:00.000+01:00"
-        start: "10:00"
-        end: "11:30"
-      - summary: "1:1"
-        description: ""
-        status: confirmed
-        start_full: "2026-08-24T11:00:00.000+01:00"
-        end_full: "2026-08-24T11:45:00.000+01:00"
-        start: "11:00"
-        end: "11:45"
-      - summary: "Architecture review"
-        description: ""
-        status: confirmed
+        start: "2:00 PM"
+        end: "3:00 PM"
         start_full: "2026-08-24T14:00:00.000+01:00"
         end_full: "2026-08-24T15:00:00.000+01:00"
-        start: "14:00"
-        end: "15:00"
-      - summary: "Release window"
-        description: ""
+        location: "Microsoft Teams Meeting"
+        background_color: "#a47ae2"
+      - summary: "Internal kick off"
+        all_day: false
         status: confirmed
-        start_full: "2026-08-24T16:30:00.000+01:00"
-        end_full: "2026-08-24T18:00:00.000+01:00"
-        start: "16:30"
-        end: "18:00"
-      - summary: "Cover for A. on support"
-        description: ""
+        start: "4:00 PM"
+        end: "4:25 PM"
+        start_full: "2026-08-24T16:00:00.000+01:00"
+        end_full: "2026-08-24T16:25:00.000+01:00"
+        location: "Microsoft Teams Meeting"
+        background_color: "#4986e7"
+      - summary: "Band practice"
+        all_day: false
         status: confirmed
-        all_day: true
-        start_full: "2026-08-25"
-        end_full: "2026-08-26"
-        start: "2026-08-25"
-        end: "2026-08-26"
-      - summary: "Travel"
-        description: ""
+        start: "7:30 PM"
+        end: "9:00 PM"
+        start_full: "2026-08-24T19:30:00.000+01:00"
+        end_full: "2026-08-24T21:00:00.000+01:00"
+        location: "Silver Band Hall, Temple Road, Oxford"
+        background_color: "#fbe983"
+      - summary: "Canceled: weekly planning"
+        all_day: false
         status: confirmed
-        start_full: "2026-08-25T08:30:00.000+01:00"
-        end_full: "2026-08-25T09:00:00.000+01:00"
-        start: "08:30"
-        end: "09:00"
-      - summary: "Onsite - migration cutover"
-        description: "Bring the runbook."
+        start: "9:30 AM"
+        end: "10:00 AM"
+        start_full: "2026-08-25T09:30:00.000+01:00"
+        end_full: "2026-08-25T10:00:00.000+01:00"
+        location: "Microsoft Teams Meeting"
+        background_color: "#4986e7"
+      - summary: "Platform requirements gathering"
+        all_day: false
         status: confirmed
-        start_full: "2026-08-25T09:00:00.000+01:00"
-        end_full: "2026-08-25T12:00:00.000+01:00"
-        start: "09:00"
-        end: "12:00"
-      - summary: "Lunch and learn"
-        description: ""
-        status: confirmed
-        start_full: "2026-08-25T13:00:00.000+01:00"
-        end_full: "2026-08-25T13:45:00.000+01:00"
-        start: "13:00"
-        end: "13:45"
-      - summary: "Sprint planning"
-        description: ""
-        status: confirmed
+        start: "3:00 PM"
+        end: "4:00 PM"
         start_full: "2026-08-25T15:00:00.000+01:00"
         end_full: "2026-08-25T16:00:00.000+01:00"
-        start: "15:00"
-        end: "16:00"
-      - summary: "Team offsite"
-        description: ""
+        location: "Microsoft Teams Meeting"
+        background_color: "#4986e7"
+      - summary: "Requirements session (placeholder)"
+        all_day: false
         status: confirmed
-        all_day: true
-        start_full: "2026-08-26"
-        end_full: "2026-08-28"
-        start: "2026-08-26"
-        end: "2026-08-28"
-      - summary: "Stand-up"
-        description: ""
+        start: "3:00 PM"
+        end: "4:00 PM"
+        start_full: "2026-08-25T15:00:00.000+01:00"
+        end_full: "2026-08-25T16:00:00.000+01:00"
+        location: "Meeting room 4"
+        background_color: "#a47ae2"
+      - summary: "Three-way sync"
+        all_day: false
         status: confirmed
-        start_full: "2026-08-26T09:30:00.000+01:00"
-        end_full: "2026-08-26T09:45:00.000+01:00"
-        start: "09:30"
-        end: "09:45"
-      - summary: "Vendor call"
-        description: ""
+        start: "10:00 AM"
+        end: "11:00 AM"
+        start_full: "2026-08-26T10:00:00.000+01:00"
+        end_full: "2026-08-26T11:00:00.000+01:00"
+        location: "The corner office"
+        background_color: "#a47ae2"
+      - summary: "Cancelled: lunchtime talk"
+        all_day: false
         status: confirmed
-        start_full: "2026-08-26T12:00:00.000+01:00"
-        end_full: "2026-08-26T13:00:00.000+01:00"
-        start: "12:00"
-        end: "13:00"
-      - summary: "Stand-up"
-        description: ""
+        start: "12:30 PM"
+        end: "1:30 PM"
+        start_full: "2026-08-26T12:30:00.000+01:00"
+        end_full: "2026-08-26T13:30:00.000+01:00"
+        location: "Meeting Room A/B"
+        background_color: "#a47ae2"
+      - summary: "Weekly sync"
+        all_day: false
         status: confirmed
-        start_full: "2026-08-27T09:00:00.000+01:00"
-        end_full: "2026-08-27T09:15:00.000+01:00"
-        start: "09:00"
-        end: "09:15"
-      - summary: "Design review"
-        description: ""
+        start: "2:15 PM"
+        end: "3:00 PM"
+        start_full: "2026-08-26T14:15:00.000+01:00"
+        end_full: "2026-08-26T15:00:00.000+01:00"
+        location: null
+        background_color: "#4986e7"
+      - summary: "Connectivity from .NET apps"
+        all_day: false
         status: confirmed
-        start_full: "2026-08-27T11:00:00.000+01:00"
-        end_full: "2026-08-27T12:30:00.000+01:00"
-        start: "11:00"
-        end: "12:30"
-      - summary: "Workshop prep"
-        description: ""
+        start: "3:30 PM"
+        end: "4:30 PM"
+        start_full: "2026-08-26T15:30:00.000+01:00"
+        end_full: "2026-08-26T16:30:00.000+01:00"
+        location: "Microsoft Teams Meeting"
+        background_color: "#4986e7"
+      - summary: "Contest band practice"
+        all_day: false
         status: confirmed
+        start: "7:30 PM"
+        end: "9:00 PM"
+        start_full: "2026-08-26T19:30:00.000+01:00"
+        end_full: "2026-08-26T21:00:00.000+01:00"
+        location: "Silver Band Hall, Temple Road, Oxford"
+        background_color: "#fbe983"
+      - summary: "One to one"
+        all_day: false
+        status: confirmed
+        start: "9:30 AM"
+        end: "10:00 AM"
+        start_full: "2026-08-27T09:30:00.000+01:00"
+        end_full: "2026-08-27T10:00:00.000+01:00"
+        location: "Microsoft Teams Meeting"
+        background_color: "#4986e7"
+      - summary: "Internal weekly catchup"
+        all_day: false
+        status: confirmed
+        start: "2:00 PM"
+        end: "2:25 PM"
         start_full: "2026-08-27T14:00:00.000+01:00"
-        end_full: "2026-08-27T17:00:00.000+01:00"
-        start: "14:00"
-        end: "17:00"
-      - summary: "Stand-up"
-        description: ""
+        end_full: "2026-08-27T14:25:00.000+01:00"
+        location: "Microsoft Teams Meeting"
+        background_color: "#4986e7"
+      - summary: "Catch up"
+        all_day: false
         status: confirmed
-        start_full: "2026-08-28T09:00:00.000+01:00"
-        end_full: "2026-08-28T09:15:00.000+01:00"
-        start: "09:00"
-        end: "09:15"
-      - summary: "Retro"
-        description: ""
+        start: "3:00 PM"
+        end: "4:00 PM"
+        start_full: "2026-08-27T15:00:00.000+01:00"
+        end_full: "2026-08-27T16:00:00.000+01:00"
+        location: "Microsoft Teams Meeting"
+        background_color: "#a47ae2"
+      - summary: "Content assessment"
+        all_day: false
         status: confirmed
+        start: "5:30 PM"
+        end: "5:55 PM"
+        start_full: "2026-08-27T17:30:00.000+01:00"
+        end_full: "2026-08-27T17:55:00.000+01:00"
+        location: null
+        background_color: "#4986e7"
+      - summary: "Weekly catch-up meeting"
+        all_day: false
+        status: confirmed
+        start: "10:00 AM"
+        end: "11:00 AM"
         start_full: "2026-08-28T10:00:00.000+01:00"
-        end_full: "2026-08-28T10:45:00.000+01:00"
-        start: "10:00"
-        end: "10:45"
-      - summary: "Team lunch"
-        description: ""
+        end_full: "2026-08-28T11:00:00.000+01:00"
+        location: "Microsoft Teams Meeting"
+        background_color: "#a47ae2"
+      - summary: "Project review call"
+        all_day: false
         status: confirmed
-        start_full: "2026-08-28T12:30:00.000+01:00"
-        end_full: "2026-08-28T13:30:00.000+01:00"
-        start: "12:30"
-        end: "13:30"
-      - summary: "Dinner"
-        description: ""
+        start: "11:00 AM"
+        end: "11:25 AM"
+        start_full: "2026-08-28T11:00:00.000+01:00"
+        end_full: "2026-08-28T11:25:00.000+01:00"
+        location: "Microsoft Teams Meeting"
+        background_color: "#4986e7"
+      - summary: "Village fete"
+        all_day: false
         status: confirmed
-        start_full: "2026-08-30T19:00:00.000+01:00"
-        end_full: "2026-08-30T20:30:00.000+01:00"
-        start: "19:00"
-        end: "20:30"
+        start: "12:30 PM"
+        end: "3:00 PM"
+        start_full: "2026-08-29T12:30:00.000+01:00"
+        end_full: "2026-08-29T15:00:00.000+01:00"
+        location: null
+        background_color: "#fbe983"
 
+  # Native Weather plugin, Tempest provider: absolute icon URLs, no top-level
+  # "conditions" key - the template falls back to right_now_conditions.
   weather_67890:
-    temperature: 17.4
-    feels_like: 16.2
-    humidity: 71
-    conditions: "Light rain"
-    weather_image: "wi-rain"
-    today_weather_image: "wi-day-rain"
-    tomorrow_weather_image: "wi-day-cloudy"
+    temperature: 15
+    feels_like: 15
+    humidity: 65
+    utc_offset: 0
+    time_format: "%H:%M"
+    data_provider: tempest
+    today_conditions: "Partly Cloudy"
+    right_now_conditions: "Partly Cloudy"
+    weather_image: "https://tempestwx.com/images/Updated/partly-cloudy-night.svg"
+    today_weather_image: "https://tempestwx.com/images/Updated/partly-cloudy-day.svg"
+    tomorrow_weather_image: "https://tempestwx.com/images/Updated/possibly-thunderstorm-day.svg"
     forecast:
+      right_now:
+        icon: partly-cloudy-night
+        conditions: "Partly Cloudy"
+        temperature: 15
+        feels_like: 15
+        humidity: 65
+        sunrise: "05:06"
+        sunset: "19:07"
+        wind:
+          max: 6
+          gust: 12.0
+          units: mph
+          direction_cardinal: ENE
       today:
-        conditions: "Rain"
-        uv_index: 2
-        mintemp: 12.3
-        maxtemp: 18.6
+        icon: partly-cloudy-day
+        conditions: "Partly Cloudy"
+        maxtemp: 25.0
+        mintemp: 14.0
+        uv_index: 0
+        day_override: null
+        precip:
+          icon: chance-rain
+          units: mm
+          amount: null
+          probability: 10
       tomorrow:
-        conditions: "Cloudy"
+        icon: possibly-thunderstorm-day
+        conditions: "Thunderstorms Possible"
+        maxtemp: 26.0
+        mintemp: 16.0
         uv_index: 3
-        mintemp: 11.5
-        maxtemp: 20.1
+        day_override: null
+        precip:
+          icon: chance-rain
+          probability: 30
+
+  # Weather Glance recipe: values live under `data`, temperatures are arrays.
+  weather_glance_67891:
+    data:
+      pill_mode: point
+      temp_trend: falling
+      current_temp: 20.9
+      current_time_formatted: "6:45 PM"
+      show_timestamps: true
+      location_name: ""
+      temperatures:
+        - [18.6]
+        - [16.3]
+        - [15.2]
+        - [14.2]
+        - [13.7]
+        - [13.3]
+        - [15.5]
+      timestamps_formatted:
+        - "8 PM"
+        - "10 PM"
+        - "12 AM"
+        - "2 AM"
+        - "4 AM"
+        - "6 AM"
+        - "8 AM"
+      pill_classes:
+        - bg--gray-70
+        - bg--gray-70
+        - bg--gray-70
+        - bg--gray-70
+        - bg--gray-65
+        - bg--gray-70
+        - bg--gray-70
+      weather_icons:
+        - "https://trmnl.com/images/plugins/weather/wi-day-sunny.svg"
+        - "https://trmnl.com/images/plugins/weather/wi-day-sunny.svg"
+        - "https://trmnl.com/images/plugins/weather/wi-day-sunny.svg"
+        - "https://trmnl.com/images/plugins/weather/wi-day-sunny.svg"
+        - "https://trmnl.com/images/plugins/weather/wi-cloudy.svg"
+        - "https://trmnl.com/images/plugins/weather/wi-day-sunny.svg"
+        - "https://trmnl.com/images/plugins/weather/wi-day-sunny.svg"

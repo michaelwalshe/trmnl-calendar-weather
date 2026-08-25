@@ -8,23 +8,34 @@
 {%- assign wx = weather_source -%}
 {%- unless wx -%}{%- assign wx = weather_67890 -%}{%- endunless -%}
 
-{%- assign events = "" | split: "," -%}
-{%- if cal.events -%}
-  {%- assign probe = cal.events | first -%}
-  {%- if probe.summary -%}
-    {%- assign events = cal.events -%}
-  {%- else -%}
-    {%- for grp in cal.events -%}{%- assign events = events | concat: grp[1] -%}{%- endfor -%}
-  {%- endif -%}
-{%- endif -%}
-{%- assign events = events | sort: "start_full" -%}
+{%- assign events = cal.events | sort: "start_full" -%}
 
+{%- comment -%} the calendar's own offset beats trmnl.user.utc_offset, which is 0
+  for accounts with no time zone set {%- endcomment -%}
 {%- assign tz_off = 0 -%}
-{%- if trmnl.user.utc_offset and trmnl.user.utc_offset != "" -%}{%- assign tz_off = trmnl.user.utc_offset | plus: 0 -%}{%- endif -%}
+{%- if trmnl.user.utc_offset -%}{%- assign tz_off = trmnl.user.utc_offset | plus: 0 -%}{%- endif -%}
+{%- if cal.today_in_tz -%}
+  {%- assign z = cal.today_in_tz | date: "%z" -%}
+  {%- assign z_h = z | slice: 1, 2 | plus: 0 -%}
+  {%- assign z_m = z | slice: 3, 2 | plus: 0 -%}
+  {%- assign z_s = z_h | times: 3600 -%}
+  {%- assign z_s = z_m | times: 60 | plus: z_s -%}
+  {%- if z contains "-" -%}{%- assign z_s = 0 | minus: z_s -%}{%- endif -%}
+  {%- assign tz_off = z_s -%}
+{%- endif -%}
 {%- assign now_utc = "now" | date: "%s" | plus: 0 -%}
-{%- if trmnl.system.timestamp_utc and trmnl.system.timestamp_utc != "" -%}{%- assign now_utc = trmnl.system.timestamp_utc | plus: 0 -%}{%- endif -%}
-{%- assign today = now_utc | plus: tz_off | date: "%Y-%m-%d" -%}
-{%- if cal.today_in_tz and cal.today_in_tz != "" -%}{%- assign today = cal.today_in_tz -%}{%- endif -%}
+{%- if trmnl.system.timestamp_utc -%}{%- assign now_utc = trmnl.system.timestamp_utc | plus: 0 -%}{%- endif -%}
+{%- assign now_local = now_utc | plus: tz_off -%}
+{%- assign today = now_local | date: "%Y-%m-%d" -%}
+{%- if cal.today_in_tz -%}{%- assign today = cal.today_in_tz | date: "%Y-%m-%d" -%}{%- endif -%}
+
+{%- comment -%} weather keys vary by provider (Tempest omits the top-level conditions) {%- endcomment -%}
+{%- assign wx_temp = wx.temperature -%}
+{%- unless wx_temp -%}{%- assign wx_temp = wx.forecast.right_now.temperature -%}{%- endunless -%}
+{%- assign wx_cond = wx.conditions -%}
+{%- unless wx_cond -%}{%- assign wx_cond = wx.right_now_conditions -%}{%- endunless -%}
+{%- unless wx_cond -%}{%- assign wx_cond = wx.forecast.right_now.conditions -%}{%- endunless -%}
+
 {%- assign base_noon = today | date: "%s" | plus: 43200 -%}
 
 <style>
@@ -61,7 +72,7 @@
   .cwm__dh { display: block; margin-bottom: 2px; border-bottom: 1px solid var(--ink); }
   .cwm__dh--today { background: var(--ink); color: var(--paper); }
   .cwm__row { display: flex; gap: 5px; overflow: hidden; }
-  .cwm__t { flex: 0 0 34px; white-space: nowrap; }
+  .cwm__t { flex: 0 0 56px; white-space: nowrap; }
   .cwm__s { overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
   .cwm__allday .cwm__s { background: var(--ink); color: var(--paper); padding: 0 3px; }
 </style>
@@ -70,13 +81,63 @@
   <div class="cwm__wx">
     <span class="text--base">{{ base_noon | date: "%a" }} {{ base_noon | date: "%d" | plus: 0 }} {{ base_noon | date: "%b" }}</span>
     {%- if wx -%}
-      {%- assign icon_now = wx.weather_image -%}
-      {%- unless icon_now contains "http" -%}
-        {%- assign icon_now = icon_now | prepend: "https://trmnl.com/images/plugins/weather/" | append: ".svg" -%}
-      {%- endunless -%}
+      {%- comment -%} providers disagree on icon names and some serve colour SVGs,
+        which all but vanish at 2-bit; reduce whatever arrives to TRMNL's mono
+        wi-* set (same mapping as full.liquid) {%- endcomment -%}
+      {%- assign raw = wx.weather_image -%}
+      {%- unless raw and raw != "" -%}{%- assign raw = "none" -%}{%- endunless -%}
+      {%- assign slug = raw | split: "/" | last | split: "." | first | downcase -%}
+      {%- assign name = "" -%}
+      {%- if slug contains "wi-" -%}
+        {%- assign name = slug -%}
+      {%- else -%}
+        {%- assign night = false -%}
+        {%- if slug contains "night" or slug contains "nt-" -%}{%- assign night = true -%}{%- endif -%}
+        {%- assign slug_len = slug | size -%}
+        {%- if slug_len == 3 and slug contains "n" -%}{%- assign night = true -%}{%- endif -%}
+        {%- if slug_len == 3 -%}
+          {%- assign code = slug | slice: 0, 2 -%}
+          {%- if code == "01" -%}{%- assign slug = "clear" -%}
+          {%- elsif code == "02" or code == "03" -%}{%- assign slug = "partly-cloudy" -%}
+          {%- elsif code == "04" -%}{%- assign slug = "overcast" -%}
+          {%- elsif code == "09" -%}{%- assign slug = "showers" -%}
+          {%- elsif code == "10" -%}{%- assign slug = "rain" -%}
+          {%- elsif code == "11" -%}{%- assign slug = "thunderstorm" -%}
+          {%- elsif code == "13" -%}{%- assign slug = "snow" -%}
+          {%- elsif code == "50" -%}{%- assign slug = "fog" -%}
+          {%- endif -%}
+        {%- endif -%}
+        {%- if slug contains "thunder" or slug contains "storm" or slug contains "lightning" -%}
+          {%- if night -%}{%- assign name = "wi-night-alt-thunderstorm" -%}{%- else -%}{%- assign name = "wi-day-thunderstorm" -%}{%- endif -%}
+        {%- elsif slug contains "sleet" or slug contains "freezing" or slug contains "wintry" -%}
+          {%- if night -%}{%- assign name = "wi-night-alt-sleet" -%}{%- else -%}{%- assign name = "wi-day-sleet" -%}{%- endif -%}
+        {%- elsif slug contains "hail" -%}
+          {%- assign name = "wi-hail" -%}
+        {%- elsif slug contains "snow" or slug contains "flurr" or slug contains "blizzard" -%}
+          {%- if night -%}{%- assign name = "wi-night-alt-snow" -%}{%- else -%}{%- assign name = "wi-day-snow" -%}{%- endif -%}
+        {%- elsif slug contains "drizzle" or slug contains "sprinkle" -%}
+          {%- if night -%}{%- assign name = "wi-night-alt-sprinkle" -%}{%- else -%}{%- assign name = "wi-day-sprinkle" -%}{%- endif -%}
+        {%- elsif slug contains "shower" -%}
+          {%- if night -%}{%- assign name = "wi-night-alt-showers" -%}{%- else -%}{%- assign name = "wi-day-showers" -%}{%- endif -%}
+        {%- elsif slug contains "rain" -%}
+          {%- if night -%}{%- assign name = "wi-night-alt-rain" -%}{%- else -%}{%- assign name = "wi-day-rain" -%}{%- endif -%}
+        {%- elsif slug contains "fog" or slug contains "mist" or slug contains "haze" -%}
+          {%- assign name = "wi-fog" -%}
+        {%- elsif slug contains "wind" or slug contains "breez" -%}
+          {%- assign name = "wi-strong-wind" -%}
+        {%- elsif slug contains "partly" or slug contains "partial" or slug contains "few" or slug contains "scattered" or slug contains "mostly-clear" -%}
+          {%- if night -%}{%- assign name = "wi-night-alt-cloudy" -%}{%- else -%}{%- assign name = "wi-day-cloudy" -%}{%- endif -%}
+        {%- elsif slug contains "overcast" or slug contains "cloud" -%}
+          {%- assign name = "wi-cloudy" -%}
+        {%- elsif slug contains "clear" or slug contains "sunny" or slug contains "sun" or slug contains "fair" -%}
+          {%- if night -%}{%- assign name = "wi-night-clear" -%}{%- else -%}{%- assign name = "wi-day-sunny" -%}{%- endif -%}
+        {%- endif -%}
+      {%- endif -%}
+      {%- if name == "" -%}{%- assign name = "wi-na" -%}{%- endif -%}
+      {%- assign icon_now = name | prepend: "https://trmnl.com/images/plugins/weather/" | append: ".svg" -%}
       <img class="image image--adaptive" src="{{ icon_now }}" alt="" />
-      <span class="text--base">{{ wx.temperature | round }}&deg;</span>
-      <span class="text--small">{{ wx.conditions }}</span>
+      <span class="text--base">{{ wx_temp | round }}&deg;</span>
+      <span class="text--small">{{ wx_cond }}</span>
       <div class="cwm__pad"></div>
       <span class="text--small">{{ wx.forecast.today.maxtemp | round }}&deg; / {{ wx.forecast.today.mintemp | round }}&deg; today</span>
     {%- else -%}

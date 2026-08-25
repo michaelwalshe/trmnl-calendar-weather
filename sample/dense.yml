@@ -16,8 +16,12 @@ variables:
   trmnl:
     user:
       utc_offset: 3600
+    system:
+      timestamp_utc: 1787564400   # 2026-08-24 09:40 UTC - pinned, see .trmnlp.yml
 
   google_calendar_12345:
+    # deliberately date-only: exercises the fallback when today_in_tz carries no
+    # UTC offset, so the clock runs in UTC while the events carry +01:00
     today_in_tz: "2026-08-24"
     event_layout: week
     first_day: 1
@@ -32,6 +36,7 @@ variables:
         start: "7:30 AM"
         end: "11:00 AM"
       - summary: "Triage"
+        background_color: "#4986e7"
         start_full: "2026-08-24T08:00:00.000+01:00"
         end_full: "2026-08-24T08:30:00.000+01:00"
         start: "8:00 AM"
@@ -47,6 +52,7 @@ variables:
         start: "8:20 AM"
         end: "9:00 AM"
       - summary: "Data quality clinic"
+        background_color: "#fbe983"
         start_full: "2026-08-24T11:15:00.000+01:00"
         end_full: "2026-08-24T12:00:00.000+01:00"
         start: "11:15 AM"
