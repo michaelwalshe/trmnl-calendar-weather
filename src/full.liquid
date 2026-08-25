@@ -417,7 +417,6 @@
 {%- assign icon_tmrw = mapped[1] | prepend: "https://trmnl.com/images/plugins/weather/" | append: ".svg" -%}
 <style>
   /* the platform wraps this markup in .view > .layout - take the whole screen */
-  .view, .layout { padding: 0 !important; }
   .layout { display: flex !important; flex-direction: column; height: 100%; }
   .layout > .cw { flex: 1 1 auto; min-height: 0; }
 
@@ -453,8 +452,7 @@
   .cw__wx-cell {
     display: flex;
     flex-direction: column;
-    justify-content: center;
-    padding: 2px 5px;
+    place-content: center;
     overflow: hidden;
     border-left: 1px dashed var(--ink);
   }
@@ -474,7 +472,6 @@
     display: flex;
     align-items: flex-end;
     gap: 4px;
-    padding: 2px 10px;
     min-width: 0;
     overflow: hidden;
     border-left: 1px dashed var(--ink);
@@ -486,9 +483,9 @@
     display: flex;
     flex-direction: column;
     align-items: center;
-    justify-content: flex-end;
+    place-content: flex-end;
   }
-  .cw__bar-wrap { flex: 1 1 auto; width: 100%; display: flex; align-items: flex-end; justify-content: center; }
+  .cw__bar-wrap { flex: 1 1 auto; width: 100%; display: flex; align-items: flex-end; place-content: center; }
   /* Height is temperature; fill is how sunny that hour is, lightest to darkest:
      clear, partly cloudy, overcast, wet. The nearest hour is marked with a
      heavier outline so the fill can stay a pure weather signal. */
@@ -496,7 +493,6 @@
     width: 100%;
     max-width: 26px;
     border: 1px solid var(--ink);
-    border-radius: 999px;
     background-size: var(--tile-size);
   }
   /* a ring, not a heavier border, so the marker still reads on a dark fill */
@@ -504,10 +500,10 @@
   /* The four fills a 2-bit panel renders flat, with no dither texture to muddy
      them at this size: paper, #AAA, #555, ink. On 1-bit the middle two fall back
      to the framework's tiles automatically. */
-  .cw__pill--s1 { background-color: var(--paper); }
-  .cw__pill--s2 { background-color: var(--bg-gray-55-color, #aaa); background-image: var(--bg-gray-55-image, none); }
-  .cw__pill--s3 { background-color: var(--bg-gray-30-color, #555); background-image: var(--bg-gray-30-image, none); }
-  .cw__pill--s4 { background-color: var(--ink); }
+  .cw__pill--s1 { background: var(--paper); }
+  .cw__pill--s2 { background: var(--bg-gray-55-color, #aaa); background-image: var(--bg-gray-55-image, none); }
+  .cw__pill--s3 { background: var(--bg-gray-30-color, #555); background-image: var(--bg-gray-30-image, none); }
+  .cw__pill--s4 { background: var(--ink); }
   .cw__bar-col span { white-space: nowrap; }
 
   /* ---------------- calendar ---------------- */
@@ -525,7 +521,7 @@
   .cw__hcell {
     display: flex;
     align-items: center;
-    justify-content: center;
+    place-content: center;
     gap: 5px;
     overflow: hidden;
     border-left: 1px dashed var(--ink);
@@ -553,8 +549,7 @@
   .cw__ad-gut, .cw__gut-head {
     display: flex;
     align-items: center;
-    justify-content: flex-end;
-    padding-right: 6px;
+    place-content: flex-end;
   }
   .cw__ad-gut span, .cw__gut-head span { white-space: nowrap; }
 
@@ -566,7 +561,7 @@
     background-size: 100% calc(100% / {{ hours }});
   }
   .cw__col--we {
-    background-color: var(--bg-gray-70-color, #fff);
+    background: var(--bg-gray-70-color, #fff);
     background-image:
       linear-gradient(to bottom, var(--ink) 0, var(--ink) 1px, transparent 1px),
       var(--bg-gray-70-image, none);
@@ -574,12 +569,14 @@
   }
   .cw__adcol {
     position: relative;
-    padding: 1px;
+    display: flex;
+    flex-direction: column;
+    gap: 1px;
     overflow: hidden;
     border-left: 1px dashed var(--ink);
   }
   .cw__adcol--we {
-    background-color: var(--bg-gray-70-color, #fff);
+    background: var(--bg-gray-70-color, #fff);
     background-image: var(--bg-gray-70-image, none);
     background-size: var(--tile-size);
   }
@@ -593,14 +590,12 @@
     position: absolute;
     box-sizing: border-box;
     min-height: 16px;
-    padding: 1px 3px 1px 9px;
     overflow: hidden;
     background: var(--paper);
     color: var(--ink);
     border: 1px solid var(--ink);
   }
-  .cw__ev--narrow { padding: 1px 2px 1px 6px; }
-  .cw__ev--sliver { min-height: 6px; padding: 0; }
+  .cw__ev--sliver { min-height: 6px; }
   .cw__ev--live { background: var(--ink); color: var(--paper); }
   .cw__ev--off { border-style: dashed; }
 
@@ -611,15 +606,15 @@
     top: 0;
     bottom: 0;
     width: 5px;
-    background-color: var(--ink);
+    background: var(--ink);
     background-size: var(--tile-size);
   }
   .cw__ev--narrow .cw__edge { width: 3px; }
   .cw__ev--sliver .cw__edge { width: 100%; }
-  .cw__edge--t1 { background-color: var(--bg-gray-20-color, #555); background-image: var(--bg-gray-20-image, none); }
-  .cw__edge--t2 { background-color: var(--bg-gray-40-color, #aaa); background-image: var(--bg-gray-40-image, none); }
-  .cw__edge--t3 { background-color: var(--bg-gray-60-color, #ddd); background-image: var(--bg-gray-60-image, none); }
-  .cw__ev--live .cw__edge { background-color: var(--paper); background-image: none; }
+  .cw__edge--t1 { background: var(--bg-gray-20-color, #555); background-image: var(--bg-gray-20-image, none); }
+  .cw__edge--t2 { background: var(--bg-gray-40-color, #aaa); background-image: var(--bg-gray-40-image, none); }
+  .cw__edge--t3 { background: var(--bg-gray-60-color, #ddd); background-image: var(--bg-gray-60-image, none); }
+  .cw__ev--live .cw__edge { background: var(--paper); background-image: none; }
   /* a sliver is all edge bar - whitening it would invert the block, not mark it */
   .cw__ev--sliver.cw__ev--live .cw__edge { display: none; }
   /* pin the leading so a label is exactly its font size tall - that is what
@@ -641,15 +636,13 @@
   .cw__chip {
     display: block;
     height: 18px;
-    margin-bottom: 1px;
-    padding: 0 3px;
     overflow: hidden;
     white-space: nowrap;
     text-overflow: ellipsis;
     background: var(--paper);
     border: 1px solid var(--ink);
   }
-  .cw__more { display: block; height: 18px; padding: 0 3px; white-space: nowrap; }
+  .cw__more { display: block; height: 18px; white-space: nowrap; }
 
   .cw__now { position: absolute; left: -1px; right: 0; height: 0; border-top: 2px solid var(--ink); }
   .cw__now::before {
@@ -667,34 +660,29 @@
   .cw__badge {
     position: absolute;
     right: 0;
-    padding: 0 3px;
     background: var(--ink);
     color: var(--paper);
     outline: 1px solid var(--paper);
   }
   .cw__badge--post { bottom: 0; }
-  .cw__hcell-badge {
-    padding: 0 3px;
-    border: 1px solid currentColor;
-  }
+  .cw__hcell-badge { border: 1px solid currentColor; }
 
   .cw__empty {
     position: absolute;
     top: 0; left: 0; right: 0; bottom: 0;
     display: flex;
     align-items: center;
-    justify-content: center;
+    place-content: center;
   }
-  .cw__empty span { padding: 6px 12px; background: var(--paper); border: 1px solid var(--ink); }
-  .cw__setup { padding: 24px 30px; }
-  .cw__setup p { margin: 0 0 8px 0; }
+  .cw__empty span { background: var(--paper); border: 1px solid var(--ink); }
+  .cw__setup { display: flex; flex-direction: column; gap: 8px; }
 </style>
 <div class="cw">
 
   {%- comment -%} ============ weather strip ============ {%- endcomment -%}
   <div class="cw__wx">
     {%- if wx or temp_now -%}
-      <div class="cw__wx-cell" style="grid-column:{{ c_now }}">
+      <div class="cw__wx-cell px--1" style="grid-column:{{ c_now }}">
         <div class="cw__wx-row">
           {%- if has_icon_now -%}
             <img class="cw__wx-icon image image--adaptive" src="{{ icon_now }}" alt="" />
@@ -708,7 +696,7 @@
 
       {%- assign fc_tmrw = wx.forecast.tomorrow -%}
       {%- if fc_tmrw and c_tmrw <= last_col -%}
-        <div class="cw__wx-cell" style="grid-column:{{ c_tmrw }}">
+        <div class="cw__wx-cell px--1" style="grid-column:{{ c_tmrw }}">
           <div class="cw__wx-row">
             {%- if has_icon_tmrw -%}
               <img class="cw__wx-icon image image--adaptive" src="{{ icon_tmrw }}" alt="" />
@@ -719,13 +707,13 @@
         </div>
       {%- endif -%}
     {%- else -%}
-      <div class="cw__wx-cell" style="grid-column:{{ c_now }}">
+      <div class="cw__wx-cell px--1" style="grid-column:{{ c_now }}">
         <span class="text--small">No weather source selected</span>
       </div>
     {%- endif -%}
 
     {%- if has_graph -%}
-      <div class="cw__graph" style="grid-column:{{ c_graph }} / -1">
+      <div class="cw__graph px--2" style="grid-column:{{ c_graph }} / -1">
         {%- for t in temps -%}
           {%- assign v = t | first -%}
           {%- unless v -%}{%- assign v = t -%}{%- endunless -%}
@@ -750,7 +738,7 @@
           <div class="cw__bar-col">
             <span class="text--small">{{ vr }}&deg;</span>
             <div class="cw__bar-wrap">
-              <div class="cw__pill cw__pill--s{{ sun }}{% if forloop.index0 == near_i %} cw__pill--near{% endif %}" style="height:{{ bar | round: 1 }}%"></div>
+              <div class="cw__pill rounded--full cw__pill--s{{ sun }}{% if forloop.index0 == near_i %} cw__pill--near{% endif %}" style="height:{{ bar | round: 1 }}%"></div>
             </div>
             <span class="text--small">{{ hourly.timestamps_formatted[forloop.index0] }}</span>
           </div>
@@ -762,12 +750,12 @@
   {%- unless cal -%}
     {%- comment -%} ============ first-run help ============ {%- endcomment -%}
     <div class="cw__cal">
-      <div class="cw__setup">
-        <p class="text--base">No calendar source selected.</p>
-        <p class="text--small">Open this plugin's settings and choose your calendar, weather and
+      <div class="cw__setup p--6">
+        <p class="m--0 text--base">No calendar source selected.</p>
+        <p class="m--0 text--small">Open this plugin's settings and choose your calendar, weather and
           (optionally) hourly weather instances, or edit the fallback merge variables at the top
           of the markup - their names are in the Merge Variables dropdown.</p>
-        <p class="text--small">Both source plugins must sit on a playlist - hidden is fine - or their data never refreshes.</p>
+        <p class="m--0 text--small">Both source plugins must sit on a playlist - hidden is fine - or their data never refreshes.</p>
       </div>
     </div>
   {%- else -%}
@@ -777,7 +765,7 @@
 
     {%- comment -%} ---- day headings ---- {%- endcomment -%}
     <div class="cw__head">
-      <div class="cw__gut-head"><span class="text--small">{{ base_noon | date: "%b" | upcase }}</span></div>
+      <div class="cw__gut-head pr--2"><span class="text--small">{{ base_noon | date: "%b" | upcase }}</span></div>
       {%- for n in (1..day_count) -%}
         {%- assign off = n | minus: 1 | times: 86400 -%}
         {%- assign day_noon = base_noon | plus: off -%}
@@ -805,7 +793,7 @@
         <div class="cw__hcell{% if day_key == today and highlight_today %} cw__hcell--today{% endif %}">
           <span class="cw__dow text--small">{{ day_noon | date: "%a" }}</span>
           <span class="text--base">{{ day_noon | date: "%d" | plus: 0 }}</span>
-          {%- if out_n > 0 -%}<span class="cw__hcell-badge text--small">+{{ out_n }}</span>{%- endif -%}
+          {%- if out_n > 0 -%}<span class="cw__hcell-badge px--1 text--small">+{{ out_n }}</span>{%- endif -%}
         </div>
       {%- endfor -%}
     </div>
@@ -813,7 +801,7 @@
     {%- comment -%} ---- all-day band ---- {%- endcomment -%}
     {%- if ad_rows > 0 -%}
       <div class="cw__ad">
-        <div class="cw__ad-gut"><span class="text--small">ALL</span></div>
+        <div class="cw__ad-gut pr--2"><span class="text--small">ALL</span></div>
         {%- for n in (1..day_count) -%}
           {%- assign off = n | minus: 1 | times: 86400 -%}
           {%- assign day_noon = base_noon | plus: off -%}
@@ -842,13 +830,13 @@
                 {%- assign x_ep = e.end_full | date: "%Y-%m-%d" | date: "%s" | plus: 0 -%}
                 {%- if x_ep <= s_ep -%}{%- assign x_ep = s_ep | plus: 86400 -%}{%- endif -%}
                 {%- if day_noon > s_ep and day_noon < x_ep and shown < cap -%}
-                  <span class="cw__chip text--small">{{ e.summary }}</span>
+                  <span class="cw__chip px--1 text--small">{{ e.summary }}</span>
                   {%- assign shown = shown | plus: 1 -%}
                 {%- endif -%}
               {%- endif -%}
             {%- endfor -%}
             {%- assign hidden = ad_n | minus: shown -%}
-            {%- if hidden > 0 -%}<span class="cw__more text--small">+{{ hidden }} more</span>{%- endif -%}
+            {%- if hidden > 0 -%}<span class="cw__more px--1 text--small">+{{ hidden }} more</span>{%- endif -%}
           </div>
         {%- endfor -%}
       </div>
@@ -982,13 +970,16 @@
 
                   {%- comment -%} width decides how much of a title is worth printing {%- endcomment -%}
                   {%- assign fit = "wide" -%}
+                  {%- assign pad = "pl--2 pr--1" -%}
                   {%- if lane_px < 44 -%}
                     {%- assign fit = "sliver" -%}
+                    {%- assign pad = "" -%}
                   {%- elsif lane_px < 70 -%}
                     {%- assign fit = "narrow" -%}
+                    {%- assign pad = "pl--1" -%}
                   {%- endif -%}
 
-                  <div class="cw__ev cw__ev--{{ fit }}{% if live %} cw__ev--live{% endif %}{% if off_event %} cw__ev--off{% endif %}"
+                  <div class="cw__ev cw__ev--{{ fit }} {{ pad }}{% if live %} cw__ev--live{% endif %}{% if off_event %} cw__ev--off{% endif %}"
                        style="top:{{ top | round: 3 }}%;height:{{ hgt | round: 3 }}%;left:{{ left | round: 3 }}%;width:{{ lane_w | round: 3 }}%">
                     <i class="cw__edge{% if tone > 0 %} cw__edge--t{{ tone }}{% endif %}"></i>
                     {%- comment -%} no time inside the block - the hour gutter carries it {%- endcomment -%}
@@ -1021,7 +1012,7 @@
           {%- endfor -%}
 
           {%- if spill > 0 -%}
-            <span class="cw__badge cw__badge--post text--small">+{{ spill }}</span>
+            <span class="cw__badge cw__badge--post px--1 text--small">+{{ spill }}</span>
           {%- endif -%}
 
           {%- if show_now and day_key == today and now_min >= win_start and now_min <= win_end -%}
@@ -1032,7 +1023,7 @@
       {%- endfor -%}
 
       {%- if events == empty -%}
-        <div class="cw__empty"><span class="text--base">Nothing scheduled</span></div>
+        <div class="cw__empty"><span class="py--1 px--3 text--base">Nothing scheduled</span></div>
       {%- endif -%}
     </div>
   </div>

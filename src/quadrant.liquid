@@ -42,7 +42,6 @@
 {%- assign base_noon = today | date: "%s" | plus: 43200 -%}
 
 <style>
-  .view, .layout { padding: 0 !important; }
   .layout { display: flex !important; flex-direction: column; height: 100%; }
   .layout > .cwm { flex: 1 1 auto; min-height: 0; }
 
@@ -61,7 +60,6 @@
     display: flex;
     align-items: center;
     gap: 6px;
-    padding: 0 6px;
     border-bottom: 2px solid var(--ink);
     overflow: hidden;
   }
@@ -69,16 +67,16 @@
   .cwm__wx span { white-space: nowrap; }
   .cwm__pad { flex: 1 1 auto; }
 
-  .cwm__list { flex: 1 1 auto; min-height: 0; overflow: hidden; padding: 0 6px; }
-  .cwm__dh { display: block; margin: 2px 0 1px 0; border-bottom: 1px solid var(--ink); }
+  .cwm__list { flex: 1 1 auto; min-height: 0; overflow: hidden; }
+  .cwm__dh { display: block; border-bottom: 1px solid var(--ink); }
   .cwm__row { display: flex; gap: 5px; overflow: hidden; }
   .cwm__t { flex: 0 0 56px; white-space: nowrap; }
   .cwm__s { overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
-  .cwm__allday .cwm__s { background: var(--ink); color: var(--paper); padding: 0 3px; }
+  .cwm__allday .cwm__s { background: var(--ink); color: var(--paper); }
 </style>
 
 <div class="cwm">
-  <div class="cwm__wx">
+  <div class="cwm__wx px--1">
     {%- if wx -%}
       {%- comment -%} providers disagree on icon names and some serve colour SVGs,
         which all but vanish at 2-bit; reduce whatever arrives to TRMNL's mono
@@ -144,7 +142,7 @@
     {%- endif -%}
   </div>
 
-  <div class="cwm__list">
+  <div class="cwm__list px--1">
     {%- assign rows = 0 -%}
     {%- for n in (1..day_span) -%}
       {%- assign off = n | minus: 1 | times: 86400 -%}
@@ -180,7 +178,7 @@
 
         {%- if hit and rows < row_cap -%}
           {%- unless printed_head -%}
-            <span class="cwm__dh text--small">{% if day_key == today %}Today{% else %}{{ day_noon | date: "%a" }} {{ day_noon | date: "%d" | plus: 0 }} {{ day_noon | date: "%b" }}{% endif %}</span>
+            <span class="cwm__dh my--1 text--small">{% if day_key == today %}Today{% else %}{{ day_noon | date: "%a" }} {{ day_noon | date: "%d" | plus: 0 }} {{ day_noon | date: "%b" }}{% endif %}</span>
             {%- assign printed_head = true -%}
             {%- assign rows = rows | plus: 1 -%}
           {%- endunless -%}
@@ -188,14 +186,14 @@
             {%- unless e.all_day -%}
               <span class="cwm__t text--small">{% if e.start and e.start != "" %}{{ e.start }}{% else %}{{ e.start_full | date: "%H:%M" }}{% endif %}</span>
             {%- endunless -%}
-            <span class="cwm__s text--small">{{ e.summary }}</span>
+            <span class="cwm__s px--1 text--small">{{ e.summary }}</span>
           </div>
           {%- assign rows = rows | plus: 1 -%}
         {%- endif -%}
       {%- endfor -%}
     {%- endfor -%}
     {%- if rows == 0 -%}
-      <div class="cwm__row"><span class="cwm__s text--base">Nothing left today</span></div>
+      <div class="cwm__row"><span class="cwm__s px--1 text--base">Nothing left today</span></div>
     {%- endif -%}
   </div>
 </div>

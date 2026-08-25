@@ -39,7 +39,6 @@
 {%- assign base_noon = today | date: "%s" | plus: 43200 -%}
 
 <style>
-  .view, .layout { padding: 0 !important; }
   .layout { display: flex !important; flex-direction: column; height: 100%; }
   .layout > .cwm { flex: 1 1 auto; min-height: 0; }
 
@@ -58,7 +57,6 @@
     display: flex;
     align-items: center;
     gap: 7px;
-    padding: 0 8px;
     border-bottom: 2px solid var(--ink);
     overflow: hidden;
   }
@@ -67,18 +65,18 @@
   .cwm__pad { flex: 1 1 auto; }
 
   .cwm__days { flex: 1 1 auto; min-height: 0; display: grid; grid-template-columns: repeat(3, 1fr); }
-  .cwm__day { min-height: 0; overflow: hidden; padding: 2px 6px; border-left: 1px dashed var(--ink); }
+  .cwm__day { min-height: 0; overflow: hidden; border-left: 1px dashed var(--ink); }
   .cwm__day:first-child { border-left: 0; }
-  .cwm__dh { display: block; margin-bottom: 2px; border-bottom: 1px solid var(--ink); }
+  .cwm__dh { display: block; border-bottom: 1px solid var(--ink); }
   .cwm__dh--today { background: var(--ink); color: var(--paper); }
   .cwm__row { display: flex; gap: 5px; overflow: hidden; }
   .cwm__t { flex: 0 0 56px; white-space: nowrap; }
   .cwm__s { overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
-  .cwm__allday .cwm__s { background: var(--ink); color: var(--paper); padding: 0 3px; }
+  .cwm__allday .cwm__s { background: var(--ink); color: var(--paper); }
 </style>
 
 <div class="cwm">
-  <div class="cwm__wx">
+  <div class="cwm__wx px--2">
     <span class="text--base">{{ base_noon | date: "%a" }} {{ base_noon | date: "%d" | plus: 0 }} {{ base_noon | date: "%b" }}</span>
     {%- if wx -%}
       {%- comment -%} providers disagree on icon names and some serve colour SVGs,
@@ -151,8 +149,8 @@
       {%- assign off = n | minus: 1 | times: 86400 -%}
       {%- assign day_noon = base_noon | plus: off -%}
       {%- assign day_key = day_noon | date: "%Y-%m-%d" -%}
-      <div class="cwm__day">
-        <span class="cwm__dh text--small{% if day_key == today %} cwm__dh--today{% endif %}">{{ day_noon | date: "%a" }} {{ day_noon | date: "%d" | plus: 0 }} {{ day_noon | date: "%b" }}</span>
+      <div class="cwm__day px--2">
+        <span class="cwm__dh mb--1 text--small{% if day_key == today %} cwm__dh--today{% endif %}">{{ day_noon | date: "%a" }} {{ day_noon | date: "%d" | plus: 0 }} {{ day_noon | date: "%b" }}</span>
         {%- assign shown = 0 -%}
         {%- assign hidden = 0 -%}
         {%- for e in events -%}
@@ -173,7 +171,7 @@
                 {%- unless e.all_day -%}
                   <span class="cwm__t text--small">{% if e.start and e.start != "" %}{{ e.start }}{% else %}{{ e.start_full | date: "%H:%M" }}{% endif %}</span>
                 {%- endunless -%}
-                <span class="cwm__s text--small">{{ e.summary }}</span>
+                <span class="cwm__s px--1 text--small">{{ e.summary }}</span>
               </div>
               {%- assign shown = shown | plus: 1 -%}
             {%- else -%}

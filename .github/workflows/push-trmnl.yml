@@ -1,49 +1,54 @@
-name: Push to TRMNL
+name: TRMNL
 
-# Uploads src/* to the private plugin whenever the markup changes on main.
-#
-# tools/push.py creates a NEW plugin when it cannot find an id, so an unguarded
-# run would make a fresh duplicate every time. Two things prevent that:
-#   - the id is read from the TRMNL_PLUGIN_ID repo variable, or from src/settings.yml
-#   - with no id known, only a manual run with "allow_create" may proceed
-# After a create, the server's settings.yml (which carries the new id) is
-# committed back, so later runs update in place.
+# Lints on every PR and push; uploads src/* to the private plugin from main.
+# Mirrors the workflow `trmnlp init` scaffolds, with one addition: `trmnlp push`
+# creates a NEW plugin when it cannot find an id, so an unguarded run would make
+# a fresh duplicate every time. The id is resolved from the TRMNL_PLUGIN_ID repo
+# variable or from src/settings.yml, and with neither the run stops rather than
+# guessing. After a create, the settings.yml the server returns is committed
+# back so later runs update in place.
 
 on:
+  pull_request:
   push:
     branches: [main]
-    paths:
-      - 'src/**'
-      - '.github/workflows/push-trmnl.yml'
   workflow_dispatch:
     inputs:
-      dry_run:
-        description: 'Check the key and list the files, upload nothing'
-        type: boolean
-        default: false
       allow_create:
         description: 'Create a new plugin if no id is known (first push only)'
         type: boolean
         default: false
 
-# never let two uploads race the settings.yml write-back
 concurrency:
   group: trmnl-push
   cancel-in-progress: false
 
 jobs:
+  lint:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: ruby/setup-ruby@v1
+        with:
+          ruby-version: '3.4'   # the gem requires >= 3.4
+          bundler-cache: false
+      - run: gem install trmnl_preview
+      - run: trmnlp lint
+
   push:
+    needs: lint
+    if: github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
     permissions:
       contents: write   # only to commit the plugin id back after a create
 
     steps:
       - uses: actions/checkout@v4
-
-      - uses: actions/setup-python@v5
+      - uses: ruby/setup-ruby@v1
         with:
-          python-version: '3.12'
-      # tools/push.py is standard library only - nothing to install
+          ruby-version: '3.4'
+          bundler-cache: false
+      - run: gem install trmnl_preview
 
       - name: Work out which plugin to update
         id: target
@@ -69,7 +74,7 @@ jobs:
           echo "::error::plugin once. Pushing blind would create a second copy every run."
           exit 1
 
-      - name: Verify the API key
+      - name: Upload
         env:
           TRMNL_API_KEY: ${{ secrets.TRMNL_API_KEY }}
           PLUGIN_ID: ${{ steps.target.outputs.id }}
@@ -78,26 +83,14 @@ jobs:
             echo "::error::Secret TRMNL_API_KEY is empty or not set for this repository."
             exit 1
           fi
+          # --force skips the overwrite prompt, which has no stdin on a runner
           if [ -n "$PLUGIN_ID" ]; then
-            python tools/push.py --dry-run --id "$PLUGIN_ID"
+            trmnlp push --force --id "$PLUGIN_ID"
           else
-            python tools/push.py --dry-run
-          fi
-
-      - name: Upload
-        if: github.event.inputs.dry_run != 'true'
-        env:
-          TRMNL_API_KEY: ${{ secrets.TRMNL_API_KEY }}
-          PLUGIN_ID: ${{ steps.target.outputs.id }}
-        run: |
-          if [ -n "$PLUGIN_ID" ]; then
-            python tools/push.py --id "$PLUGIN_ID"
-          else
-            python tools/push.py
+            trmnlp push --force
           fi
 
       - name: Persist the plugin id
-        if: github.event.inputs.dry_run != 'true'
         env:
           BRANCH: ${{ github.ref_name }}
         run: |

@@ -135,16 +135,18 @@ exactly what changed.
 
 ### From CI
 
-`.github/workflows/push-trmnl.yml` runs the same script whenever `src/**`
-changes on `main`, and on demand from the Actions tab. It needs the
-`TRMNL_API_KEY` repository secret.
+`.github/workflows/push-trmnl.yml` follows the workflow `trmnlp init` scaffolds:
+a **lint** job on every PR and push, and a **push** job that runs
+`trmnlp push --force` from `main`. It needs the `TRMNL_API_KEY` repository
+secret. CI uses the official gem rather than `tools/push.py`, which exists for
+local pushes on machines without Ruby.
 
-The one thing to get right is the plugin id. `push.py` **creates a new plugin
-when it cannot find one**, so a workflow that ran without an id would make a
-fresh duplicate every time. The id is resolved from the `TRMNL_PLUGIN_ID`
-repository variable, or failing that from `id:` in `src/settings.yml`; with
-neither, the run fails rather than guessing. To make the plugin the first time,
-either:
+It adds one thing the scaffold does not have: a guard on the plugin id.
+`trmnlp push` **creates a new plugin when it cannot find an id**, so a workflow
+that ran without one would make a fresh duplicate every time. The id is resolved
+from the `TRMNL_PLUGIN_ID` repository variable, or failing that from `id:` in
+`src/settings.yml`; with neither, the run stops rather than guessing. To make the
+plugin the first time, either:
 
 - push once locally (`python tools/push.py`) and commit the `src/settings.yml`
   the server hands back, which is the id-bearing version; or
@@ -153,9 +155,8 @@ either:
   commit is marked `[skip ci]`, because it touches `src/` and would otherwise
   retrigger the workflow that made it.
 
-**Manual run** also offers **dry_run**, which authenticates and lists the files
-without uploading. The workflow verifies the key that way before every real
-upload, so a missing or expired secret fails before anything reaches the device.
+`--force` skips the "settings will be overwritten" confirmation, which has no
+stdin on a runner.
 
 The write-back needs `contents: write`, which the workflow requests. If your
 repository or organisation caps the `GITHUB_TOKEN` to read-only, set
@@ -222,6 +223,17 @@ Everything visual is in the `<style>` block at the top of each template:
 - Event labels pin `line-height` to 1, so a label is exactly its font size tall.
   That is what lets a 30-minute block carry a line without shaving the
   descenders off it, and it is what sets the block height thresholds below.
+- **Spacing comes from the framework's `p--N` / `px--N` / `m--N` utilities, not
+  from CSS.** `trmnlp lint` gates the build on `LimitedInlineStyles`, which
+  counts the strings `padding`, `margin`, `background-color`, `border-radius`,
+  `justify-content`, `text-align`, `object-fit` and `font-size` anywhere in the
+  markup — `<style>` blocks included — and caps them at six across all four
+  templates. The scale is 4px per step (`p--1` = 4px). Two substitutions keep
+  the rest honest: `background:` instead of `background-color:` (put the
+  shorthand *before* any `background-image`, which it resets), and
+  `place-content:` instead of `justify-content:` — equivalent here, because
+  every one of these flex containers is single-line, where `align-content` has
+  no effect.
 
 ## Data it relies on
 
@@ -277,9 +289,9 @@ To check your own payloads:
 - Only the full layout has had the column-aligned weather strip, the no-times
   treatment and the 800×600 sizing; the mashup layouts still print a time per
   row, which is what makes sense in a list.
-- `trmnlp lint` reports `LimitedInlineStyles` — it counts CSS property names
-  anywhere in the markup and caps them at six, which a hand-built grid exceeds.
-  Advisory only.
+- The mashup layouts no longer reset `.layout` padding, so on the hosted
+  renderer they pick up the framework's `var(--gap)` cell padding. The local
+  harness has no `.layout` element, so that cannot be previewed here.
 
 ## References
 

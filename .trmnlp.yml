@@ -25,6 +25,7 @@ custom_fields:
   hour_from: ""
   hour_to: ""
   now_line: "yes"
+  screen_height: "600"
 
 variables:
   trmnl:
