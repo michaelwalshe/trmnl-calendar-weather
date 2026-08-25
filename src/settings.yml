@@ -100,3 +100,6 @@ custom_fields:
   max: 2000
   placeholder: '600'
   description: Panel height in pixels; blank uses the device value, else 600
+name: Week and Weather
+description: A glance calendar and weather in 1
+refresh_interval: 15
