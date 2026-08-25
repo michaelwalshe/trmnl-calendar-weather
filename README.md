@@ -158,6 +158,21 @@ plugin the first time, either:
 `--force` skips the "settings will be overwritten" confirmation, which has no
 stdin on a runner.
 
+**This repo is also connected to TRMNL's GitHub Sync app.** That syncs one way
+automatically — saving the plugin in the TRMNL UI commits the server's
+`settings.yml` here as *"Updated from TRMNL"*. The other direction is manual:
+Sync only offers an import button. Automating that direction is what this
+workflow is for. The push job skips commits authored by `trmnl-sync[bot]`, or
+the two would chase each other: a push from here changes the plugin, which
+triggers a sync commit, which would trigger another push. The settings write-back
+also tolerates losing a race with the Sync app, since the id is committed
+already and nothing is lost by skipping it.
+
+Note that the Sync app writes the server's canonical `settings.yml`, which has
+**no `custom_fields`** — the form definitions live only in this repo. Take care
+not to let a sync commit drop them; that is what happened when plugin 455834 was
+first created.
+
 The write-back needs `contents: write`, which the workflow requests. If your
 repository or organisation caps the `GITHUB_TOKEN` to read-only, set
 `TRMNL_PLUGIN_ID` instead and the workflow never needs to commit.

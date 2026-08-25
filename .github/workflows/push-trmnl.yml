@@ -7,6 +7,12 @@ name: TRMNL
 # variable or from src/settings.yml, and with neither the run stops rather than
 # guessing. After a create, the settings.yml the server returns is committed
 # back so later runs update in place.
+#
+# This repo is also connected to TRMNL's GitHub Sync app, which commits the
+# server's settings.yml here whenever the plugin is saved in the TRMNL UI. That
+# direction is automatic; GitHub -> TRMNL is not (Sync only offers an import
+# button), which is what this workflow automates. The push job skips the Sync
+# app's own commits so the two cannot chase each other.
 
 on:
   pull_request:
@@ -37,7 +43,14 @@ jobs:
 
   push:
     needs: lint
-    if: github.ref == 'refs/heads/main'
+    # Skip commits the TRMNL Sync app made. It writes src/settings.yml back to
+    # this repo whenever the plugin changes on the server, so without this a
+    # push from here would trigger a sync commit, which would trigger another
+    # push, and so on.
+    if: >-
+      github.ref == 'refs/heads/main' &&
+      github.event.head_commit.author.name != 'trmnl-sync[bot]' &&
+      !contains(github.event.head_commit.message, 'Updated from TRMNL')
     runs-on: ubuntu-latest
     permissions:
       contents: write   # only to commit the plugin id back after a create
@@ -104,4 +117,8 @@ jobs:
           # [skip ci] matters: this commit touches src/ and would otherwise
           # retrigger the workflow that made it
           git commit -m "Persist TRMNL plugin id from push [skip ci]"
-          git push origin "HEAD:refs/heads/$BRANCH"
+          # the TRMNL Sync app writes this file too, so lose the race politely -
+          # the id is already committed, nothing is lost by skipping
+          git pull --rebase --autostash origin "$BRANCH" || true
+          git push origin "HEAD:refs/heads/$BRANCH" ||             echo "::warning::Could not push settings.yml back (likely a TRMNL Sync race). Nothing lost."
+
