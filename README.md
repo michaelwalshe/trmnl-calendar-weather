@@ -111,10 +111,15 @@ Nothing in the markup is account-specific, so there is no code to edit:
    Refresh**. Until they are picked the plugin shows a first-run message rather
    than an empty grid.
 
-If the grid stays on the first-run message after picking and saving, the fields
-are not persisting — check that each source is on a playlist, and note that
-re-uploading `settings.yml` replaces the field *definitions*, which can clear
-the selected *values*. Re-pick after a push.
+**Order matters:** re-uploading `settings.yml` replaces the field *definitions*,
+which can clear the selected *values*. Push first, pick your sources second.
+
+Every custom field is **required unless it says `optional: true`** — an empty
+required field blocks the whole settings form from saving, which silently takes
+the source pickers down with it. `hourly_source`, `hour_from`, `hour_to` and
+`screen_height` are all marked optional for that reason; the two that stay
+required are the calendar and the weather, which the plugin genuinely cannot
+run without.
 
 ## Setting it up on TRMNL
 
