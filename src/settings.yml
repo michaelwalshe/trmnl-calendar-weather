@@ -1,4 +1,5 @@
 ---
+id: 455834
 name: Week and Weather
 description: Rolling week grid with weather
 strategy: plugin_merge
