@@ -3,14 +3,10 @@
   weather line. Falls through to tomorrow once today is done.
 {%- endcomment -%}
 
-{%- comment -%} merge variable as the base, form field as an override - but only when
-  it carries real data, since plugin_instance_select may hand back an id {%- endcomment -%}
-{%- assign cal = google_calendar_451642 -%}
-{%- if calendar_source.events -%}{%- assign cal = calendar_source -%}{%- endif -%}
-{%- assign wx = weather_451639 -%}
-{%- if weather_source.temperature or weather_source.forecast or weather_source.conditions -%}
-  {%- assign wx = weather_source -%}
-{%- endif -%}
+{%- comment -%} a plugin_instance_select keyname resolves to the selected
+  instance's parsed data, so no plugin ids belong in here {%- endcomment -%}
+{%- assign cal = calendar_source -%}
+{%- assign wx = weather_source -%}
 
 {%- assign day_span = 2 -%}
 {%- assign row_cap = 9 -%}

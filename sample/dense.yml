@@ -19,7 +19,7 @@ variables:
     system:
       timestamp_utc: 1787564400   # 2026-08-24 09:40 UTC - pinned, see .trmnlp.yml
 
-  google_calendar_451642:
+  calendar_source:
     # deliberately date-only: exercises the fallback when today_in_tz carries no
     # UTC offset, so the clock runs in UTC while the events carry +01:00
     today_in_tz: "2026-08-24"
@@ -80,7 +80,7 @@ variables:
         start: "6:00 AM"
         end: "6:45 AM"
 
-  weather_451639:
+  weather_source:
     temperature: 8.6
     feels_like: 4.1
     humidity: 88

@@ -108,17 +108,17 @@ laid out for the 800×480 original, so they leave dead space on a 600px panel.
 6. Tick **Remove screen padding**; the grid is designed to bleed to the edges.
 7. Save, pick your sources in the plugin's settings, then **Force Refresh**.
 
-The merge variables at the top of each template are the base; the form fields
-override them. Their names are `<plugin_keyname>_<plugin_setting_id>`, listed in
-the Merge Variables dropdown of the markup editor — **a recipe is a private
-plugin**, so Weather Glance appears as `private_plugin_<id>`, not
-`weather_glance_<id>`. The values committed here point at this account's
-instances; change them for another account.
+A `plugin_instance_select` keyname resolves to the selected instance's **parsed
+data object**, so `calendar_source.events` and `weather_source.temperature` are
+the data — there are no plugin ids in the templates, and nothing to edit when
+moving the plugin to another account. Just pick the three sources in the
+plugin's settings.
 
-The form field is only preferred when it carries real data (`calendar_source.events`
-rather than just `calendar_source`), because `plugin_instance_select` can hand
-back an id string. That is truthy but has no `.events`, so testing presence alone
-renders an empty grid with nothing to explain why.
+The Merge Variables dropdown (`<plugin_keyname>_<plugin_setting_id>`) is the
+other way to reach the same data, but it hard-codes one account's instance ids
+into the markup, so it is a last resort for a source that will not appear in a
+dropdown. Note that a recipe is a private plugin, so Weather Glance appears
+there as `private_plugin_<id>`, not `weather_glance_<id>`.
 
 Refresh cadence follows your playlist schedule: the sources refresh on their own
 interval and the new values map into this plugin.

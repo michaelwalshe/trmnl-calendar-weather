@@ -19,25 +19,18 @@
 {%- endcomment -%}
 
 {%- comment -%} ---------- resolve the three sources ----------
-  The merge variable is the base; the form field overrides it. Test the field for
-  real data rather than mere presence: plugin_instance_select can hand back an id
-  string instead of the parsed node, which is truthy but has no .events, and
-  would render an empty grid with no hint as to why.
+  A plugin_instance_select field resolves to the selected instance's parsed data
+  object, so the keyname is the data: calendar_source.events, weather_source.temperature.
+  No plugin ids belong in here - they would pin the template to one account.
 
-  Merge variable names are <plugin_keyname>_<plugin_setting_id> and are listed in
-  the Merge Variables dropdown of the markup editor. Note that a recipe is a
-  private plugin, so Weather Glance appears as private_plugin_<id>.
+  Pick the three sources in this plugin's settings. Each must also sit on a
+  playlist (hidden is fine) or its data never refreshes.
 {%- endcomment -%}
-{%- assign cal = google_calendar_451642 -%}
-{%- if calendar_source.events -%}{%- assign cal = calendar_source -%}{%- endif -%}
+{%- assign cal = calendar_source -%}
+{%- assign wx = weather_source -%}
 
-{%- assign wx = weather_451639 -%}
-{%- if weather_source.temperature or weather_source.forecast or weather_source.conditions -%}
-  {%- assign wx = weather_source -%}
-{%- endif -%}
-
-{%- assign hourly = private_plugin_454878 -%}
-{%- if hourly_source.temperatures or hourly_source.data -%}{%- assign hourly = hourly_source -%}{%- endif -%}
+{%- comment -%} the hourly recipe may nest its payload under .data {%- endcomment -%}
+{%- assign hourly = hourly_source -%}
 {%- if hourly.data -%}{%- assign hourly = hourly.data -%}{%- endif -%}
 
 {%- comment -%} ---------- settings (custom fields, all optional) ---------- {%- endcomment -%}
@@ -721,6 +714,13 @@
     {%- else -%}
       <div class="cw__wx-cell px--1" style="grid-column:{{ c_now }}">
         <span class="text--small">No weather source selected</span>
+      </div>
+    {%- endif -%}
+
+    {%- if has_graph == false and hourly_source and c_graph <= last_col -%}
+      {%- comment -%} selected but unusable - say so rather than just dropping the graph {%- endcomment -%}
+      <div class="cw__wx-cell px--1" style="grid-column:{{ c_graph }} / -1">
+        <span class="text--small">Hourly source has no "temperatures" - check the recipe</span>
       </div>
     {%- endif -%}
 

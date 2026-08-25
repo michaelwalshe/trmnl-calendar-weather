@@ -39,7 +39,7 @@ variables:
     plugin_settings:
       instance_name: Week and Weather
 
-  google_calendar_451642:
+  calendar_source:
     tz: Europe/London
     today_in_tz: "2026-08-24T00:00:00.000+01:00"
     event_layout: rolling_week
@@ -236,7 +236,7 @@ variables:
 
   # Native Weather plugin, Tempest provider: absolute icon URLs, no top-level
   # "conditions" key - the template falls back to right_now_conditions.
-  weather_451639:
+  weather_source:
     temperature: 15
     feels_like: 15
     humidity: 65
@@ -286,7 +286,7 @@ variables:
           probability: 30
 
   # Weather Glance recipe: values live under `data`, temperatures are arrays.
-  private_plugin_454878:
+  hourly_source:
     data:
       pill_mode: point
       temp_trend: falling
