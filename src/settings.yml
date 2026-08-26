@@ -48,8 +48,8 @@ custom_fields:
   name: Hourly weather
   plugin_keyname: private_plugin
   optional: true
-  description: Weather Glance instance, drawn as the temperature graph
-  help_text: Leave empty to drop the graph from the weather strip.
+  description: Weather Glance instance, drawn as icons over a sunlight curve
+  help_text: Leave empty to drop the hourly panel from the weather strip.
 - keyname: days
   field_type: select
   name: Days shown

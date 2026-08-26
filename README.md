@@ -3,9 +3,10 @@
 ![The full layout, rendered from the sample payload](_build/full.png)
 
 A single TRMNL private plugin that draws a rolling-week time grid in the style of
-Google Calendar's week view, under a weather strip with an hourly temperature
-graph. It fetches nothing itself: the **Plugin Merge** strategy hands it the
-parsed JSON of plugins you already have connected.
+Google Calendar's week view, under a weather strip: now, tomorrow, and the next
+few hours as condition icons over a sunlight curve. It fetches nothing itself:
+the **Plugin Merge** strategy hands it the parsed JSON of plugins you already
+have connected.
 
 Three sources, all picked from dropdowns in the plugin's own settings:
 
@@ -13,7 +14,7 @@ Three sources, all picked from dropdowns in the plugin's own settings:
 |---|---|---|
 | `calendar_source` | Google Calendar | events, colours, and that plugin's display preferences |
 | `weather_source` | Weather (any provider) | now, today, tomorrow |
-| `hourly_source` | Weather Glance recipe | the next few hours as bars (optional) |
+| `hourly_source` | Weather Glance recipe | the next few hours, one icon and temperature each (optional) |
 
 Target panel is 800x600 at 2-bit greyscale, i.e. a Kindle 4 in landscape at
 about 167 PPI. That is denser than the TRMNL original (800x480 at ~137 PPI), so
@@ -53,16 +54,20 @@ Other preview renders, all from the sample payload in `.trmnlp.yml`:
 - **A dashed now-line** with a marker dot across today's column. Dashed so it
   stays legible where it crosses an in-progress event, which is filled with ink.
 - **A weather strip on the same column track as the grid**: current conditions
-  over today's column, tomorrow's high and low over tomorrow's, the hourly graph
+  over today's column, tomorrow's high and low over tomorrow's, the hourly panel
   filling the rest. Without an hourly source the strip shrinks and the grid
   takes the space back.
-- **Hourly pills where height is temperature and fill darkens as the sun goes
-  down**, read from the weather source's own sunrise and sunset and falling back
-  to 06:00 and 19:00: empty in full daylight, light grey within an hour of
-  sunrise or sunset, dark grey through twilight, solid at night. Those are the
-  four levels a 2-bit panel renders flat; on 1-bit the middle two fall back to
-  dither tiles. The nearest hour gets a ring rather than a different fill, so
-  fill stays a pure daylight signal.
+- **The next few hours as a condition icon and a temperature each, over a
+  sunlight curve.** Temperature is a number rather than a bar height, because at
+  this size the figure is what actually gets read; the panel's one graphed
+  quantity is daylight. The curve approximates solar elevation as an inverted
+  parabola between the weather source's own sunrise and sunset, falling back to
+  06:00 and 19:00, and flattens to a baseline through the night. It is drawn as
+  two `clip-path` layers rather than an `<svg>`: an ink one for the edge, and the
+  same shape pushed down by the line width and filled with `gray-70` on top. That
+  is the lightest level a 2-bit panel still textures rather than flattening to
+  paper, which is what keeps the black icon strokes readable over it. The current
+  hour's time label is inverted, matching today's column heading below.
 - **Locations inside long events**, when they are a real place rather than a
   Teams or Zoom link.
 
@@ -212,12 +217,18 @@ Everything visual is in the `<style>` block at the top of each template.
   tokens, so dark mode inverts correctly. Don't hard-code hex values.
 - Greys come from the framework's `--bg-gray-N-color` / `--bg-gray-N-image`
   pairs (N runs 1 lightest to 75 darkest) with `--dither-bg-size`, driving the
-  edge bars, the graph pills and the weekend shading. Being framework tokens
-  they follow `--framework-bit-depth`: flat grey on 2-bit, dither tiles on
-  1-bit. Don't reintroduce the `gray-N.png` files, which are fixed 1-bit and
-  cost four network fetches per render.
+  edge bars, the sunlight fill and the weekend shading. Being framework tokens
+  they follow `--framework-bit-depth`: on 2-bit, `gray-10`-`30` flatten to #555
+  and `gray-35`-`55` to #AAA, while `gray-60`-`75` keep a tile over paper, which
+  is the only way to get a grey light enough to read black line art over. On
+  1-bit everything is a tile. Don't reintroduce the `gray-N.png` files, which are
+  fixed 1-bit and cost four network fetches per render.
 - `--gut`, `--wx-h`, `--head-h` are the hour-label column, weather strip and day
-  heading heights in pixels; the grid takes what is left. `--gut` narrows
+  heading heights in pixels; the grid takes what is left. `--sun-h` is the height
+  of the sunlight curve band inside the strip, and `--sun-shape` / `--sun-under`
+  are the two generated `clip-path` polygons. Those two are only emitted when
+  there is a curve to draw, because an empty value makes `polygon()` invalid and
+  Chrome then paints the whole unclipped layer. `--gut` narrows
   automatically on a 24-hour clock, where the widest label is `23` not `12 PM`.
 - Text uses `text--small` (12px), `text--base` (16px) and `text--large` (21px).
   These are bitmap pixel fonts, so those three sizes are the only crisp ones.
@@ -261,10 +272,20 @@ variable exposes the plugin *definition*, not its data: the recipe's own output
 is one level down under `merge_variables`, and may nest again under `data`. The
 template unwraps both and only adopts a candidate that actually yields
 temperatures. Keys read are `current_temp`, `temperatures` (array of arrays),
-`timestamps_formatted` and `weather_icons`, which drives the pill fills. With no
-icons, every pill takes the partly-cloudy level. Temperatures always come from
-this source when it has them, including the headline figure, so the number and
-the graph agree; everything else stays with the weather plugin.
+`timestamps_formatted` and `weather_icons`, whose URLs are used as given - the
+recipe has already mapped them onto TRMNL's mono `wi-*` set, so there is nothing
+for the template's own mapping to do. A reading with no icon just leaves the slot
+empty. Temperatures always come from this source when it has them, including the
+headline figure, so the two agree; everything else stays with the weather plugin.
+
+`timestamps_formatted` also carries the x axis. The labels are pre-formatted
+("8 PM" or "20:00"), so the template reads the leading number and any AM/PM
+marker off each one, then takes the step from the first two readings rather than
+subtracting the last label from the first: across a window that wraps midnight
+the endpoints alone cannot say whether the span is four hours or twenty-eight.
+That also rejects a recipe set to a daily interval, which emits dates instead of
+times - every label parses to hour zero, so the implied window overruns a day and
+the curve is dropped, leaving the icons and temperatures on their own.
 
 To check your own payloads:
 `https://trmnl.com/plugins/google_calendar?data=true&plugin_setting_id=<id>`.
@@ -286,6 +307,12 @@ To check your own payloads:
 - The strip, heading and all-day band are fixed pixel heights rather than
   multiples of `--ui-scale`, so they do not grow on a panel with a device scale
   other than 1. The grid takes whatever is left.
+- The sunlight curve uses today's sunrise and sunset for the whole window, so an
+  hour that falls on tomorrow morning is off by however much the day has changed
+  overnight - a minute or two in practice. The parabola is an approximation of
+  solar elevation, not an ephemeris.
+- Hour labels are read for their hour only, so a recipe on a 30-minute interval
+  would place two readings at the same point on the curve.
 - Only the full layout has the column-aligned weather strip, the no-times
   treatment and the 800x600 sizing. The mashup layouts still print a time per
   row, which is what makes sense in a list.

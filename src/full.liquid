@@ -1,7 +1,8 @@
 {%- comment -%}
 ================================================================================
   WEEK + WEATHER  -  TRMNL private plugin, "Plugin Merge" strategy
-  Rolling week time grid + weather strip with an hourly temperature graph.
+  Rolling week time grid under a weather strip: now, tomorrow, and the next few
+  hours as condition icons over a sunlight curve.
 
   Three sources, each resolved from a plugin_instance_select form field, with a
   hard-coded merge variable as fallback (edit the names to match the ones in the
@@ -9,8 +10,9 @@
 
     calendar_source  Google Calendar        events + display preferences
     weather_source   Weather                now, today, tomorrow
-    hourly_source    Weather Glance recipe  next few hours, drawn as bars
-                     (optional - the strip drops the graph without it)
+    hourly_source    Weather Glance recipe  next few hours: temperature, an
+                     icon and a time per reading (optional - the strip drops
+                     the hourly panel without it)
 
   Sized for an 800x600 panel at ~167 PPI (Kindle 4 in landscape). The layout is
   flex/grid and fills whatever it is given; only the text-density heuristics
@@ -158,38 +160,38 @@
 {%- if ad_rows > 0 -%}{%- assign ad_px = ad_rows | times: 20 | plus: 3 -%}{%- endif -%}
 
 {%- comment -%} ---------- hourly series ----------
-  Round once: the bar heights use the same integer the label prints, so two
-  readings both shown as 16 deg are never drawn at different heights.
+  The recipe hands over one temperature, one pre-formatted label ("8 PM" or
+  "20:00") and one icon URL per reading. Parse the hour out of each label once:
+  it marks the current reading and sets the x axis of the sunlight curve.
 {%- endcomment -%}
 {%- assign temps = hourly.temperatures -%}
-{%- assign t_min = 999 -%}
-{%- assign t_max = -999 -%}
-{%- for t in temps -%}
-  {%- assign v = t | first -%}
-  {%- unless v -%}{%- assign v = t -%}{%- endunless -%}
-  {%- assign v = v | round -%}
-  {%- if v < t_min -%}{%- assign t_min = v -%}{%- endif -%}
-  {%- if v > t_max -%}{%- assign t_max = v -%}{%- endif -%}
-{%- endfor -%}
-{%- assign t_span = t_max | minus: t_min -%}
-{%- if t_span <= 0 -%}{%- assign t_span = 1 -%}{%- endif -%}
+{%- assign n_pts = temps | size -%}
+{%- assign last_pt = n_pts | minus: 1 -%}
 
-{%- comment -%} which bar is the nearest hour? the labels are pre-formatted
-  ("8 PM" or "20:00"), so read the leading number and any AM/PM marker {%- endcomment -%}
-{%- assign near_i = -1 -%}
-{%- assign near_d = 99 -%}
+{%- assign ts_mins = "" -%}
 {%- for ts in hourly.timestamps_formatted -%}
   {%- assign tsu = ts | upcase -%}
   {%- assign th = tsu | split: ":" | first | split: " " | first | plus: 0 -%}
   {%- if tsu contains "PM" and th < 12 -%}{%- assign th = th | plus: 12 -%}{%- endif -%}
   {%- if tsu contains "AM" and th == 12 -%}{%- assign th = 0 -%}{%- endif -%}
+  {%- assign tm = th | times: 60 -%}
+  {%- assign ts_mins = ts_mins | append: tm | append: "," -%}
+{%- endfor -%}
+{%- assign ts_mins = ts_mins | split: "," -%}
+{%- assign n_ts = ts_mins | size -%}
+
+{%- comment -%} which reading is the nearest hour? {%- endcomment -%}
+{%- assign near_i = -1 -%}
+{%- assign near_d = 99 -%}
+{%- for tm in ts_mins -%}
+  {%- assign th = tm | plus: 0 | divided_by: 60 -%}
   {%- assign d = th | minus: now_h -%}
   {%- if d < 0 -%}{%- assign d = 0 | minus: d -%}{%- endif -%}
   {%- if d > 12 -%}{%- assign d = 24 | minus: d -%}{%- endif -%}
   {%- if d < near_d -%}{%- assign near_d = d -%}{%- assign near_i = forloop.index0 -%}{%- endif -%}
 {%- endfor -%}
 
-{%- comment -%} ---------- daylight, for the pill fills ----------
+{%- comment -%} ---------- daylight, which is what the curve plots ----------
   Parsed from the weather source; falls back to 06:00/19:00 when absent.
 {%- endcomment -%}
 {%- assign sun_up = 360 -%}
@@ -209,11 +211,89 @@
   {%- assign sun_dn = ss_h | times: 60 | plus: ss_m -%}
 {%- endif -%}
 
-{%- comment -%} without the graph the strip shrinks and the grid takes the space {%- endcomment -%}
-{%- assign has_graph = false -%}
-{%- if temps and temps != empty and c_graph <= last_col -%}{%- assign has_graph = true -%}{%- endif -%}
+{%- comment -%} without the hourly panel the strip shrinks and the grid takes the space {%- endcomment -%}
+{%- assign has_hourly = false -%}
+{%- if temps and temps != empty and c_graph <= last_col -%}{%- assign has_hourly = true -%}{%- endif -%}
+{%- assign sun_px = 46 -%}
 {%- assign wx_h = 58 -%}
-{%- if has_graph -%}{%- assign wx_h = 88 -%}{%- endif -%}
+{%- if has_hourly -%}{%- assign wx_h = 88 -%}{%- endif -%}
+
+{%- comment -%} ---------- the sunlight curve ----------
+  Two stacked divs under a clip-path polygon rather than an <svg>, so the fill
+  can carry the framework's dither tokens and follow --framework-bit-depth like
+  every other shaded surface here. Percentages throughout, so the shape does not
+  need to know how wide the columns end up.
+
+  Solar elevation is approximated by an inverted parabola: zero at sunrise and
+  sunset, peaking at solar noon. Close enough at 46 pixels tall, and it needs
+  only multiply and divide - Liquid has no sin.
+
+  x runs 0..100 across the panel with the readings on column centres, so the
+  curve carries on half a step past the first and last of them rather than
+  stopping short of the edges. One pass builds two point strings: the shape, and
+  the same shape pushed down by the line width. The lower one is the fill and is
+  drawn on top, so what is left of the ink layer reads as the curve's edge.
+
+  y=0 sits at sun_base, not at 100, so a night hour still shows the baseline.
+{%- endcomment -%}
+{%- assign sun_top = 10 -%}
+{%- assign sun_base = 95 -%}
+{%- assign sun_amp = sun_base | minus: sun_top -%}
+{%- assign lw_pct = 200.0 | divided_by: sun_px -%}
+
+{%- comment -%} The readings are evenly spaced, so take the step from the first
+  two and multiply, rather than subtracting the last label from the first: over a
+  window that wraps midnight the endpoints alone cannot say whether the span is
+  four hours or twenty-eight. It also rejects a daily-interval recipe for free,
+  which emits dates rather than times - every label parses to hour zero, so the
+  step is nil and the implied window overruns a day. {%- endcomment -%}
+{%- assign m_first = 0 -%}
+{%- assign win_min = 0 -%}
+{%- assign step_min = 0 -%}
+{%- assign has_sun = false -%}
+{%- if has_hourly and n_pts > 1 and n_ts >= n_pts and sun_dn > sun_up -%}
+  {%- assign m_first = ts_mins[0] | plus: 0 -%}
+  {%- assign m_next = ts_mins[1] | plus: 0 -%}
+  {%- assign step_min = m_next | minus: m_first -%}
+  {%- if step_min <= 0 -%}{%- assign step_min = step_min | plus: 1440 -%}{%- endif -%}
+  {%- assign win_min = step_min | times: last_pt -%}
+  {%- if step_min > 0 and win_min <= 1440 -%}{%- assign has_sun = true -%}{%- endif -%}
+{%- endif -%}
+
+{%- assign sun_shape = "" -%}
+{%- assign sun_under = "" -%}
+{%- if has_sun -%}
+  {%- assign half_step = step_min | times: 0.5 -%}
+  {%- assign m_lo = m_first | minus: half_step -%}
+  {%- assign chart_min = win_min | plus: half_step | plus: half_step -%}
+  {%- assign sun_mid = sun_up | plus: sun_dn | divided_by: 2 -%}
+  {%- assign sun_half = sun_dn | minus: sun_up | divided_by: 2 -%}
+  {%- assign n_samp = last_pt | times: 4 -%}
+  {%- for s in (0..n_samp) -%}
+    {%- assign fx = s | times: 1.0 | divided_by: n_samp -%}
+    {%- assign m = fx | times: chart_min | plus: m_lo -%}
+    {%- comment -%} the window can start before midnight and end after the next
+      one, so fold back into a single day - twice at the outside {%- endcomment -%}
+    {%- if m < 0 -%}{%- assign m = m | plus: 1440 -%}{%- endif -%}
+    {%- if m >= 1440 -%}{%- assign m = m | minus: 1440 -%}{%- endif -%}
+    {%- if m >= 1440 -%}{%- assign m = m | minus: 1440 -%}{%- endif -%}
+    {%- assign y = sun_base -%}
+    {%- if m > sun_up and m < sun_dn -%}
+      {%- assign d = m | minus: sun_mid | times: 1.0 | divided_by: sun_half -%}
+      {%- assign e = d | times: d -%}
+      {%- assign e = 1.0 | minus: e -%}
+      {%- assign drop = e | times: sun_amp -%}
+      {%- assign y = sun_base | minus: drop -%}
+    {%- endif -%}
+    {%- assign xs = fx | times: 100 | round: 2 -%}
+    {%- assign ys = y | round: 2 -%}
+    {%- assign yu = y | plus: lw_pct | round: 2 -%}
+    {%- assign sun_shape = sun_shape | append: xs | append: "% " | append: ys | append: "%," -%}
+    {%- assign sun_under = sun_under | append: xs | append: "% " | append: yu | append: "%," -%}
+  {%- endfor -%}
+  {%- assign sun_shape = sun_shape | append: "100% 100%,0% 100%" -%}
+  {%- assign sun_under = sun_under | append: "100% 100%,0% 100%" -%}
+{%- endif -%}
 
 {%- comment -%} ---------- fixed chrome, then whatever is left is the grid ---------- {%- endcomment -%}
 {%- assign is_24h = true -%}
@@ -452,6 +532,14 @@
     --wx-h: {{ wx_h }}px;
     --head-h: {{ head_h }}px;
     --ad-h: {{ ad_px }}px;
+    --sun-h: {{ sun_px }}px;
+    {%- if has_sun %}
+    /* generated above: the curve, and the same curve pushed down by the line
+       width. An empty value would make polygon() invalid and paint the whole
+       layer, so the two clipped divs are only emitted when these are. */
+    --sun-shape: {{ sun_shape }};
+    --sun-under: {{ sun_under }};
+    {%- endif %}
     /* Greys come from the framework so they follow --framework-bit-depth: on a
        2-bit panel these resolve to real grey levels, on 1-bit to dither tiles. */
     --tile-size: var(--dither-bg-size, 16px 16px);
@@ -493,43 +581,49 @@
   .cw__cap { display: flex; align-items: baseline; gap: 5px; min-width: 0; }
   .cw__lo { font-weight: inherit; }
 
-  .cw__graph {
+  /* ---------------- hourly: condition icons over a sunlight curve ----------- */
+  /* Three stacked rows on one column track: temperature, then the curve with the
+     icons over it, then the times. */
+  .cw__hourly {
     display: flex;
-    align-items: flex-end;
-    gap: 4px;
+    flex-direction: column;
+    place-content: center;
     min-width: 0;
     overflow: hidden;
     border-left: 1px dashed var(--ink);
   }
-  .cw__bar-col {
+  .cw__hr-row { display: flex; min-width: 0; }
+  .cw__hr-row > * {
     flex: 1 1 0;
     min-width: 0;
-    height: 100%;
     display: flex;
-    flex-direction: column;
     align-items: center;
-    place-content: flex-end;
+    place-content: center;
+    overflow: hidden;
+    white-space: nowrap;
   }
-  .cw__bar-wrap { flex: 1 1 auto; width: 100%; display: flex; align-items: flex-end; place-content: center; }
-  /* Height is temperature; fill is how sunny that hour is, lightest to darkest:
-     clear, partly cloudy, overcast, wet. The nearest hour is marked with a
-     heavier outline so the fill can stay a pure weather signal. */
-  .cw__pill {
-    width: 100%;
-    max-width: 26px;
-    border: 1px solid var(--ink);
+  .cw__hr-temps, .cw__hr-times { flex: 0 0 auto; }
+  /* the now marker, inverted to match today's column heading below. On the inner
+     span so the fill hugs the label instead of the whole cell. */
+  .cw__hr-now { background: var(--ink); color: var(--paper); }
+
+  .cw__sun { position: relative; flex: 0 0 var(--sun-h); min-width: 0; }
+  .cw__sun-line, .cw__sun-fill {
+    position: absolute;
+    top: 0; left: 0; right: 0; bottom: 0;
+  }
+  .cw__sun-line { background: var(--ink); clip-path: polygon(var(--sun-shape)); }
+  /* gray-70 is the lightest level a 2-bit panel still textures rather than
+     flattening to paper, which is what keeps the black icon strokes on top of it
+     readable. On 1-bit it falls back to the framework's tile. */
+  .cw__sun-fill {
+    background: var(--bg-gray-70-color, #fff);
+    background-image: var(--bg-gray-70-image, none);
     background-size: var(--tile-size);
+    clip-path: polygon(var(--sun-under));
   }
-  /* a ring, not a heavier border, so the marker still reads on a dark fill */
-  .cw__pill--near { outline: 1px solid var(--ink); outline-offset: 2px; }
-  /* The four fills a 2-bit panel renders flat, with no dither texture to muddy
-     them at this size: paper, #AAA, #555, ink. On 1-bit the middle two fall back
-     to the framework's tiles automatically. */
-  .cw__pill--s1 { background: var(--paper); }
-  .cw__pill--s2 { background: var(--bg-gray-55-color, #aaa); background-image: var(--bg-gray-55-image, none); }
-  .cw__pill--s3 { background: var(--bg-gray-30-color, #555); background-image: var(--bg-gray-30-image, none); }
-  .cw__pill--s4 { background: var(--ink); }
-  .cw__bar-col span { white-space: nowrap; }
+  .cw__sun-icons { position: relative; height: 100%; }
+  .cw__sun-icon { width: 30px; height: 30px; }
 
   /* ---------------- calendar ---------------- */
   .cw__cal { flex: 1 1 auto; min-height: 0; display: flex; flex-direction: column; }
@@ -747,46 +841,53 @@
       </div>
     {%- endif -%}
 
-    {%- if has_graph == false and hourly_source and c_graph <= last_col -%}
-      {%- comment -%} selected but unusable - say so rather than just dropping the graph {%- endcomment -%}
+    {%- if has_hourly == false and hourly_source and c_graph <= last_col -%}
+      {%- comment -%} selected but unusable - say so rather than just dropping the panel {%- endcomment -%}
       <div class="cw__wx-cell px--1" style="grid-column:{{ c_graph }} / -1">
         <span class="text--small">Hourly source has no "temperatures" - check the recipe</span>
       </div>
     {%- endif -%}
 
-    {%- if has_graph -%}
-      <div class="cw__graph px--2" style="grid-column:{{ c_graph }} / -1">
-        {%- for t in temps -%}
-          {%- assign v = t | first -%}
-          {%- unless v -%}{%- assign v = t -%}{%- endunless -%}
-          {%- assign vr = v | round -%}
-          {%- assign bar = vr | minus: t_min | times: 66.0 | divided_by: t_span | plus: 34 -%}
-          {%- comment -%} fill darkens as the sun goes down: day, sunrise/sunset,
-            twilight, night. Read the hour off the pre-formatted label. {%- endcomment -%}
-          {%- assign bt = hourly.timestamps_formatted[forloop.index0] | upcase -%}
-          {%- assign bh = bt | split: ":" | first | split: " " | first | plus: 0 -%}
-          {%- if bt contains "PM" and bh < 12 -%}{%- assign bh = bh | plus: 12 -%}{%- endif -%}
-          {%- if bt contains "AM" and bh == 12 -%}{%- assign bh = 0 -%}{%- endif -%}
-          {%- assign bm = bh | times: 60 -%}
-          {%- assign dawn_a = sun_up | minus: 120 -%}
-          {%- assign dawn_b = sun_up | minus: 30 -%}
-          {%- assign day_a = sun_up | plus: 60 -%}
-          {%- assign day_b = sun_dn | minus: 60 -%}
-          {%- assign dusk_a = sun_dn | plus: 30 -%}
-          {%- assign dusk_b = sun_dn | plus: 120 -%}
-          {%- assign sun = 4 -%}
-          {%- if bm >= day_a and bm <= day_b -%}{%- assign sun = 1 -%}
-          {%- elsif bm >= dawn_b and bm <= dusk_a -%}{%- assign sun = 2 -%}
-          {%- elsif bm >= dawn_a and bm <= dusk_b -%}{%- assign sun = 3 -%}
+    {%- if has_hourly -%}
+      {%- comment -%} Temperature is a number, not a bar height: at this size the
+        figure is what gets read, and the panel's one graphed quantity is the
+        daylight behind the icons. {%- endcomment -%}
+      <div class="cw__hourly px--2" style="grid-column:{{ c_graph }} / -1">
+        <div class="cw__hr-row cw__hr-temps">
+          {%- for t in temps -%}
+            {%- assign v = t | first -%}
+            {%- unless v -%}{%- assign v = t -%}{%- endunless -%}
+            <span class="text--base">{{ v | round }}&deg;</span>
+          {%- endfor -%}
+        </div>
+        <div class="cw__sun">
+          {%- if has_sun -%}
+            <div class="cw__sun-line"></div>
+            <div class="cw__sun-fill"></div>
           {%- endif -%}
-          <div class="cw__bar-col">
-            <span class="text--small">{{ vr }}&deg;</span>
-            <div class="cw__bar-wrap">
-              <div class="cw__pill rounded--full cw__pill--s{{ sun }}{% if forloop.index0 == near_i %} cw__pill--near{% endif %}" style="height:{{ bar | round: 1 }}%"></div>
-            </div>
-            <span class="text--small">{{ hourly.timestamps_formatted[forloop.index0] }}</span>
+          <div class="cw__hr-row cw__sun-icons">
+            {%- for t in temps -%}
+              {%- assign ic = hourly.weather_icons[forloop.index0] -%}
+              <span>
+                {%- if ic and ic != "" -%}
+                  <img class="cw__sun-icon image image--adaptive" src="{{ ic }}" alt="" />
+                {%- endif -%}
+              </span>
+            {%- endfor -%}
           </div>
-        {%- endfor -%}
+        </div>
+        <div class="cw__hr-row cw__hr-times">
+          {%- for t in temps -%}
+            {%- assign lbl = hourly.timestamps_formatted[forloop.index0] -%}
+            <span class="text--small">
+              {%- if forloop.index0 == near_i -%}
+                <span class="cw__hr-now px--1">{{ lbl }}</span>
+              {%- else -%}
+                {{- lbl -}}
+              {%- endif -%}
+            </span>
+          {%- endfor -%}
+        </div>
       </div>
     {%- endif -%}
   </div>
