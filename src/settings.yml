@@ -1,6 +1,6 @@
 ---
 strategy: plugin_merge
-no_screen_padding: 'yes'
+no_screen_padding: 'no'
 dark_mode: 'no'
 static_data: ''
 polling_verb: get
