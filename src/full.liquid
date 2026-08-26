@@ -219,10 +219,11 @@
 {%- if has_hourly -%}{%- assign wx_h = 88 -%}{%- endif -%}
 
 {%- comment -%} ---------- the sunlight curve ----------
-  Two stacked divs under a clip-path polygon rather than an <svg>, so the fill
-  can carry the framework's dither tokens and follow --framework-bit-depth like
-  every other shaded surface here. Percentages throughout, so the shape does not
-  need to know how wide the columns end up.
+  Two stacked divs under a clip-path polygon rather than an <svg>. The points are
+  percentages, so the shape stretches to whatever width the columns end up
+  without the template having to know it; an <svg> would need
+  preserveAspectRatio="none" to do the same, and that scales the stroke
+  unevenly with it.
 
   Solar elevation is approximated by an inverted parabola: zero at sunrise and
   sunset, peaking at solar noon. Close enough at 46 pixels tall, and it needs
@@ -231,8 +232,9 @@
   x runs 0..100 across the panel with the readings on column centres, so the
   curve carries on half a step past the first and last of them rather than
   stopping short of the edges. One pass builds two point strings: the shape, and
-  the same shape pushed down by the line width. The lower one is the fill and is
-  drawn on top, so what is left of the ink layer reads as the curve's edge.
+  the same shape pushed down by the line width. The lower one is painted in paper
+  on top, so all that survives of the ink layer is the curve's edge - a line,
+  with nothing shaded underneath it.
 
   y=0 sits at sun_base, not at 100, so a night hour still shows the baseline.
 {%- endcomment -%}
@@ -535,8 +537,9 @@
     --sun-h: {{ sun_px }}px;
     {%- if has_sun %}
     /* generated above: the curve, and the same curve pushed down by the line
-       width. An empty value would make polygon() invalid and paint the whole
-       layer, so the two clipped divs are only emitted when these are. */
+       width to mask it back to an edge. An empty value would make polygon()
+       invalid and paint the whole layer, so the clipped divs are only emitted
+       when these are. */
     --sun-shape: {{ sun_shape }};
     --sun-under: {{ sun_under }};
     {%- endif %}
@@ -608,19 +611,24 @@
   .cw__hr-now { background: var(--ink); color: var(--paper); }
 
   .cw__sun { position: relative; flex: 0 0 var(--sun-h); min-width: 0; }
-  .cw__sun-line, .cw__sun-fill {
+  .cw__sun-line, .cw__sun-mask, .cw__sun-dash {
     position: absolute;
     top: 0; left: 0; right: 0; bottom: 0;
   }
+  /* The curve is a line, not an area: the ink layer is the whole shape, and the
+     mask is the same shape pushed down by the line width and painted in paper on
+     top, so all that survives is the edge. Nothing under the curve is shaded, so
+     the icons sit on bare paper and there is no tone to read as a quantity. */
   .cw__sun-line { background: var(--ink); clip-path: polygon(var(--sun-shape)); }
-  /* gray-70 is the lightest level a 2-bit panel still textures rather than
-     flattening to paper, which is what keeps the black icon strokes on top of it
-     readable. On 1-bit it falls back to the framework's tile. */
-  .cw__sun-fill {
-    background: var(--bg-gray-70-color, #fff);
-    background-image: var(--bg-gray-70-image, none);
-    background-size: var(--tile-size);
-    clip-path: polygon(var(--sun-under));
+  .cw__sun-mask { background: var(--paper); clip-path: polygon(var(--sun-under)); }
+  /* Paper stripes over the finished line, which is what breaks it into dashes -
+     the clip-path shape itself has no notion of a stroke to dash. Everything
+     either side of the line is already paper, so the stripes only show where they
+     cross it. Same 5px on, 5px off as the now-line, so the two agree; hard
+     colour stops, so there is no gradient for the panel to dither. */
+  .cw__sun-dash {
+    background-image: repeating-linear-gradient(to right,
+      transparent 0 5px, var(--paper) 5px 10px);
   }
   .cw__sun-icons { position: relative; height: 100%; }
   .cw__sun-icon { width: 30px; height: 30px; }
@@ -863,7 +871,8 @@
         <div class="cw__sun">
           {%- if has_sun -%}
             <div class="cw__sun-line"></div>
-            <div class="cw__sun-fill"></div>
+            <div class="cw__sun-mask"></div>
+            <div class="cw__sun-dash"></div>
           {%- endif -%}
           <div class="cw__hr-row cw__sun-icons">
             {%- for t in temps -%}

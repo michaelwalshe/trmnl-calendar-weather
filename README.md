@@ -62,12 +62,14 @@ Other preview renders, all from the sample payload in `.trmnlp.yml`:
   this size the figure is what actually gets read; the panel's one graphed
   quantity is daylight. The curve approximates solar elevation as an inverted
   parabola between the weather source's own sunrise and sunset, falling back to
-  06:00 and 19:00, and flattens to a baseline through the night. It is drawn as
-  two `clip-path` layers rather than an `<svg>`: an ink one for the edge, and the
-  same shape pushed down by the line width and filled with `gray-70` on top. That
-  is the lightest level a 2-bit panel still textures rather than flattening to
-  paper, which is what keeps the black icon strokes readable over it. The current
-  hour's time label is inverted, matching today's column heading below.
+  06:00 and 19:00, and flattens to a baseline through the night. It is a bare
+  dashed line with nothing shaded under it, so the icons sit on clean paper and no
+  tone reads as a second quantity. Mechanically that is three `clip-path`/gradient
+  layers rather than an `<svg>`: the ink shape, the same shape pushed down by the
+  line width and painted in paper on top to leave only the edge, then paper
+  stripes across the result to break that edge into dashes - 5px on, 5px off, the
+  same rhythm as the now-line in the grid below. The current hour's time label is
+  inverted, matching today's column heading.
 - **Locations inside long events**, when they are a real place rather than a
   Teams or Zoom link.
 
@@ -217,18 +219,22 @@ Everything visual is in the `<style>` block at the top of each template.
   tokens, so dark mode inverts correctly. Don't hard-code hex values.
 - Greys come from the framework's `--bg-gray-N-color` / `--bg-gray-N-image`
   pairs (N runs 1 lightest to 75 darkest) with `--dither-bg-size`, driving the
-  edge bars, the sunlight fill and the weekend shading. Being framework tokens
-  they follow `--framework-bit-depth`: on 2-bit, `gray-10`-`30` flatten to #555
-  and `gray-35`-`55` to #AAA, while `gray-60`-`75` keep a tile over paper, which
-  is the only way to get a grey light enough to read black line art over. On
+  edge bars and the weekend shading. Being framework tokens they follow
+  `--framework-bit-depth`: on 2-bit, `gray-10`-`30` flatten to #555 and
+  `gray-35`-`55` to #AAA, while `gray-60`-`75` keep a tile over paper. That last
+  band is the only way to get a wash light enough to keep 12px type and black
+  line art legible on top, which is why the weekend columns use `gray-70`. On
   1-bit everything is a tile. Don't reintroduce the `gray-N.png` files, which are
   fixed 1-bit and cost four network fetches per render.
 - `--gut`, `--wx-h`, `--head-h` are the hour-label column, weather strip and day
   heading heights in pixels; the grid takes what is left. `--sun-h` is the height
   of the sunlight curve band inside the strip, and `--sun-shape` / `--sun-under`
-  are the two generated `clip-path` polygons. Those two are only emitted when
+  are the two generated `clip-path` polygons - the curve, and the copy pushed down
+  by the line width that masks it back to an edge. Those two are only emitted when
   there is a curve to draw, because an empty value makes `polygon()` invalid and
-  Chrome then paints the whole unclipped layer. `--gut` narrows
+  Chrome then paints the whole unclipped layer. The dashes are a separate
+  `repeating-linear-gradient` layer, because a `clip-path` shape has no stroke to
+  apply `border-style: dashed` to. `--gut` narrows
   automatically on a 24-hour clock, where the widest label is `23` not `12 PM`.
 - Text uses `text--small` (12px), `text--base` (16px) and `text--large` (21px).
   These are bitmap pixel fonts, so those three sizes are the only crisp ones.
