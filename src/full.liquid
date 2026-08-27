@@ -673,11 +673,11 @@
     height: 0;
     border-top: 1px solid var(--ink);
   }
-  .cw__ad-gut, .cw__gut-head {
-    display: flex;
-    align-items: center;
-    place-content: flex-end;
-  }
+  {%- comment -%} display:flex + centering here comes from the framework's
+    own flex/flex--center-y/flex--right utility classes on the elements
+    below instead of a custom rule -- safe because both only ever wrap a
+    single child, so .flex's own default gap has nothing to apply between.
+  {%- endcomment -%}
   .cw__ad-gut span, .cw__gut-head span { white-space: nowrap; }
 
   .cw__col {
@@ -804,12 +804,13 @@
   .cw__badge--post { bottom: 0; }
   .cw__hcell-badge { border: 1px solid currentColor; }
 
+  {%- comment -%} display:flex + centering comes from the framework's own
+    flex/flex--center utility classes on the element below -- safe because
+    it only ever wraps a single child. Positioning stays custom CSS: no
+    framework utility covers absolute inset positioning. {%- endcomment -%}
   .cw__empty {
     position: absolute;
     top: 0; left: 0; right: 0; bottom: 0;
-    display: flex;
-    align-items: center;
-    place-content: center;
   }
   .cw__empty span { background: var(--paper); border: 1px solid var(--ink); }
   .cw__setup { display: flex; flex-direction: column; gap: 8px; }
@@ -921,7 +922,7 @@
 
     {%- comment -%} ---- day headings ---- {%- endcomment -%}
     <div class="cw__head">
-      <div class="cw__gut-head pr--2"><span class="text--small">{{ base_noon | date: "%b" | upcase }}</span></div>
+      <div class="cw__gut-head pr--2 flex flex--center-y flex--right"><span class="text--small">{{ base_noon | date: "%b" | upcase }}</span></div>
       {%- for n in (1..day_count) -%}
         {%- assign off = n | minus: 1 | times: 86400 -%}
         {%- assign day_noon = base_noon | plus: off -%}
@@ -957,7 +958,7 @@
     {%- comment -%} ---- all-day band ---- {%- endcomment -%}
     {%- if ad_rows > 0 -%}
       <div class="cw__ad">
-        <div class="cw__ad-gut pr--2"><span class="text--small">ALL</span></div>
+        <div class="cw__ad-gut pr--2 flex flex--center-y flex--right"><span class="text--small">ALL</span></div>
         {%- for n in (1..day_count) -%}
           {%- assign off = n | minus: 1 | times: 86400 -%}
           {%- assign day_noon = base_noon | plus: off -%}
@@ -1179,7 +1180,7 @@
       {%- endfor -%}
 
       {%- if events == empty -%}
-        <div class="cw__empty"><span class="py--1 px--3 text--base">Nothing scheduled</span></div>
+        <div class="cw__empty flex flex--center"><span class="py--1 px--3 text--base">Nothing scheduled</span></div>
       {%- endif -%}
     </div>
   </div>
