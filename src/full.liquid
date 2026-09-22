@@ -429,6 +429,19 @@
 {%- assign px_per_min = body_px | times: 1.0 | divided_by: win_span -%}
 {%- assign col_w = screen_w | minus: gut | divided_by: day_count -%}
 
+{%- comment -%}
+  How many minutes does one event's own label need at the top of its box
+  before it's safe to start something else in the same lane -- roughly
+  one line of 12px text plus its box's own padding/border, converted from
+  screen pixels to minutes using the scale above. Two events only need to
+  split width if THIS window (not their full, possibly much longer,
+  durations) actually collides -- a later event starting well after an
+  earlier one's label has already had room to show can run at full width
+  and simply draw over the earlier one's unlabelled continuation, the way
+  a real day-view calendar (Google Calendar included) handles it.
+{%- endcomment -%}
+{%- assign label_min = 18.0 | divided_by: px_per_min -%}
+
 {%- comment -%} ---------- weather, normalised across providers ---------- {%- endcomment -%}
 {%- assign wx_now = wx.forecast.right_now -%}
 {%- assign wx_temp = wx.temperature -%}
@@ -1074,14 +1087,20 @@
                     Calendar included) keeps a long block at one fixed
                     width and position for as long as it runs; if something
                     shorter needs the same slot partway through, it's drawn
-                    on top rather than making the long block resize. Basis
-                    is peak concurrency reached anywhere within my own span
-                    (checked at each visible moment a nearby event starts,
-                    since peak overlap always occurs at some interval's
-                    start) -- not "does any other event's span merely touch
-                    mine anywhere", which over-counts a long block against
-                    several short, mutually non-overlapping meetings inside
-                    it.
+                    on top rather than making the long block resize.
+
+                    Two events only need to actually split width if their
+                    LABELS would collide, not just because their boxes
+                    overlap in time -- a label only ever shows once, right
+                    at an event's own top, so a second event starting well
+                    after the first one's label already had room can run
+                    full width and simply overlap the first one's plain
+                    (by-then unlabelled) continuation underneath. So the
+                    concurrency check below tests each candidate event's own
+                    short label_min window at its start, not its full real
+                    duration -- checked at each visible moment a nearby
+                    event starts, since peak overlap always occurs at some
+                    interval's start.
                   {%- endcomment -%}
                   {%- assign ovl = 0 -%}
                   {%- for cp in events -%}
@@ -1106,8 +1125,11 @@
                                 {%- assign oed = o.end_full | date: "%Y-%m-%d" -%}
                                 {%- if oed != osd -%}{%- assign oemin = 1440 -%}{%- endif -%}
                                 {%- if oemin <= osmin -%}{%- assign oemin = osmin | plus: 30 -%}{%- endif -%}
-                                {%- if oemin > win_start and osmin < win_end -%}
-                                  {%- if osmin <= cpsmin and oemin > cpsmin -%}{%- assign concurrent = concurrent | plus: 1 -%}{%- endif -%}
+                                {%- comment -%} shrink to this event's own label window, capped at its real end {%- endcomment -%}
+                                {%- assign olabel_end = osmin | plus: label_min -%}
+                                {%- if olabel_end > oemin -%}{%- assign olabel_end = oemin -%}{%- endif -%}
+                                {%- if olabel_end > win_start and osmin < win_end -%}
+                                  {%- if osmin <= cpsmin and olabel_end > cpsmin -%}{%- assign concurrent = concurrent | plus: 1 -%}{%- endif -%}
                                 {%- endif -%}
                               {%- endif -%}
                             {%- endunless -%}
