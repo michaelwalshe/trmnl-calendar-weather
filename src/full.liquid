@@ -736,14 +736,12 @@
     background: var(--ink);
     background-size: var(--tile-size);
   }
-  .cw__ev--narrow .cw__edge { width: 3px; }
-  .cw__ev--sliver .cw__edge { width: 100%; }
+  .cw__ev--narrow .cw__edge,
+  .cw__ev--sliver .cw__edge { width: 3px; }
   .cw__edge--t1 { background: var(--bg-gray-20-color, #555); background-image: var(--bg-gray-20-image, none); }
   .cw__edge--t2 { background: var(--bg-gray-40-color, #aaa); background-image: var(--bg-gray-40-image, none); }
   .cw__edge--t3 { background: var(--bg-gray-60-color, #ddd); background-image: var(--bg-gray-60-image, none); }
   .cw__ev--live .cw__edge { background: var(--paper); background-image: none; }
-  /* a sliver is all edge bar - whitening it would invert the block, not mark it */
-  .cw__ev--sliver.cw__ev--live .cw__edge { display: none; }
   /* pin the leading so a label is exactly its font size tall - that is what
      lets a 30-minute block carry one line without shaving the descenders */
   .cw .cw__ev .cw__ev-txt,
@@ -1070,55 +1068,72 @@
                 {%- endif -%}
 
                 {%- if lane >= 0 -%}
-                  {%- comment -%} clamp into the visible window -- segments below are built within this range {%- endcomment -%}
-                  {%- assign vs = smin -%}
-                  {%- if vs < win_start -%}{%- assign vs = win_start -%}{%- endif -%}
-                  {%- assign ve = emin -%}
-                  {%- if ve > win_end -%}{%- assign ve = win_end -%}{%- endif -%}
-
                   {%- comment -%}
-                    A long block can be genuinely triple-booked for 20
-                    minutes and completely free for the next 3 hours -- one
-                    flat width for its whole duration is either too cramped
-                    everywhere (sized for the worst moment) or overlaps a
-                    real clash (sized for the common case). Split the
-                    rendered box at every point a nearby event starts or
-                    ends within my visible span, and size + position each
-                    resulting segment by what's genuinely concurrent right
-                    there -- this is what a real day-view calendar does for
-                    a long meeting against several short, non-overlapping
-                    ones inside it. Minutes are zero-padded to 4 digits so a
-                    plain string sort (Liquid has no numeric one) orders
-                    them correctly.
+                    Width, once, for the block's whole duration -- not
+                    recomputed per moment. A real day-view calendar (Google
+                    Calendar included) keeps a long block at one fixed
+                    width and position for as long as it runs; if something
+                    shorter needs the same slot partway through, it's drawn
+                    on top rather than making the long block resize. Basis
+                    is peak concurrency reached anywhere within my own span
+                    (checked at each visible moment a nearby event starts,
+                    since peak overlap always occurs at some interval's
+                    start) -- not "does any other event's span merely touch
+                    mine anywhere", which over-counts a long block against
+                    several short, mutually non-overlapping meetings inside
+                    it.
                   {%- endcomment -%}
-                  {%- assign vs_p = vs | prepend: "0000" | slice: -4, 4 -%}
-                  {%- assign ve_p = ve | prepend: "0000" | slice: -4, 4 -%}
-                  {%- assign cuts = vs_p | append: "," | append: ve_p -%}
-                  {%- for o in events -%}
-                    {%- unless o.all_day -%}
-                      {%- assign osd = o.start_full | date: "%Y-%m-%d" -%}
-                      {%- if osd == day_key -%}
-                        {%- assign osmin = o.start_full | date: "%H" | plus: 0 | times: 60 -%}
-                        {%- assign osm = o.start_full | date: "%M" | plus: 0 -%}
-                        {%- assign osmin = osmin | plus: osm -%}
-                        {%- assign oemin = o.end_full | date: "%H" | plus: 0 | times: 60 -%}
-                        {%- assign oem = o.end_full | date: "%M" | plus: 0 -%}
-                        {%- assign oemin = oemin | plus: oem -%}
-                        {%- assign oed = o.end_full | date: "%Y-%m-%d" -%}
-                        {%- if oed != osd -%}{%- assign oemin = 1440 -%}{%- endif -%}
-                        {%- if oemin <= osmin -%}{%- assign oemin = osmin | plus: 30 -%}{%- endif -%}
-                        {%- if osmin > vs and osmin < ve -%}
-                          {%- assign p = osmin | prepend: "0000" | slice: -4, 4 -%}
-                          {%- assign cuts = cuts | append: "," | append: p -%}
-                        {%- endif -%}
-                        {%- if oemin > vs and oemin < ve -%}
-                          {%- assign p = oemin | prepend: "0000" | slice: -4, 4 -%}
-                          {%- assign cuts = cuts | append: "," | append: p -%}
+                  {%- assign ovl = 0 -%}
+                  {%- for cp in events -%}
+                    {%- unless cp.all_day -%}
+                      {%- assign cpsd = cp.start_full | date: "%Y-%m-%d" -%}
+                      {%- if cpsd == day_key -%}
+                        {%- assign cpsmin = cp.start_full | date: "%H" | plus: 0 | times: 60 -%}
+                        {%- assign cpsm = cp.start_full | date: "%M" | plus: 0 -%}
+                        {%- assign cpsmin = cpsmin | plus: cpsm -%}
+                        {%- if cpsmin >= win_start and cpsmin < win_end and cpsmin >= smin and cpsmin < emin -%}
+                          {%- assign concurrent = 0 -%}
+                          {%- for o in events -%}
+                            {%- unless o.all_day -%}
+                              {%- assign osd = o.start_full | date: "%Y-%m-%d" -%}
+                              {%- if osd == day_key -%}
+                                {%- assign osmin = o.start_full | date: "%H" | plus: 0 | times: 60 -%}
+                                {%- assign osm = o.start_full | date: "%M" | plus: 0 -%}
+                                {%- assign osmin = osmin | plus: osm -%}
+                                {%- assign oemin = o.end_full | date: "%H" | plus: 0 | times: 60 -%}
+                                {%- assign oem = o.end_full | date: "%M" | plus: 0 -%}
+                                {%- assign oemin = oemin | plus: oem -%}
+                                {%- assign oed = o.end_full | date: "%Y-%m-%d" -%}
+                                {%- if oed != osd -%}{%- assign oemin = 1440 -%}{%- endif -%}
+                                {%- if oemin <= osmin -%}{%- assign oemin = osmin | plus: 30 -%}{%- endif -%}
+                                {%- if oemin > win_start and osmin < win_end -%}
+                                  {%- if osmin <= cpsmin and oemin > cpsmin -%}{%- assign concurrent = concurrent | plus: 1 -%}{%- endif -%}
+                                {%- endif -%}
+                              {%- endif -%}
+                            {%- endunless -%}
+                          {%- endfor -%}
+                          {%- if concurrent > ovl -%}{%- assign ovl = concurrent -%}{%- endif -%}
                         {%- endif -%}
                       {%- endif -%}
                     {%- endunless -%}
                   {%- endfor -%}
-                  {%- assign boundaries = cuts | split: "," | uniq | sort -%}
+                  {%- if ovl < 1 -%}{%- assign ovl = 1 -%}{%- endif -%}
+                  {%- if ovl > 3 -%}{%- assign ovl = 3 -%}{%- endif -%}
+                  {%- if lane >= ovl -%}{%- assign lane = ovl | minus: 1 -%}{%- endif -%}
+                  {%- assign lane_w = 100.0 | divided_by: ovl -%}
+                  {%- assign lane_px = col_w | divided_by: ovl -%}
+
+                  {%- comment -%} clamp into the visible window {%- endcomment -%}
+                  {%- assign vs = smin -%}
+                  {%- if vs < win_start -%}{%- assign vs = win_start -%}{%- endif -%}
+                  {%- assign ve = emin -%}
+                  {%- if ve > win_end -%}{%- assign ve = win_end -%}{%- endif -%}
+                  {%- assign dur = ve | minus: vs -%}
+
+                  {%- assign top = vs | minus: win_start | times: 100.0 | divided_by: win_span -%}
+                  {%- assign hgt = dur | times: 100.0 | divided_by: win_span -%}
+                  {%- assign left = lane | times: lane_w -%}
+                  {%- assign px = dur | times: px_per_min -%}
 
                   {%- comment -%} grey tone for this event's calendar colour {%- endcomment -%}
                   {%- assign tone = 0 -%}
@@ -1130,93 +1145,55 @@
                     {%- endfor -%}
                   {%- endif -%}
 
+                  {%- assign live = false -%}
+                  {%- if day_key == today and now_min >= smin and now_min < emin -%}{%- assign live = true -%}{%- endif -%}
+
                   {%- assign off_event = false -%}
                   {%- if e.summary contains "Cancel" -%}{%- assign off_event = true -%}{%- endif -%}
 
-                  {%- for b in boundaries -%}
-                    {%- unless forloop.last -%}
-                      {%- assign seg_start = b | plus: 0 -%}
-                      {%- assign seg_end = boundaries[forloop.index] | plus: 0 -%}
-                      {%- if seg_end > seg_start -%}
+                  {%- comment -%}
+                    Width still decides how much of a title is worth
+                    printing, but never NO title -- overflow:hidden plus
+                    ellipsis on .cw__ev-txt already degrades gracefully
+                    down to a couple of characters, which reads as "there's
+                    something here" instead of a blank filled box. A
+                    genuinely overlapping 4th+ event still falls to the
+                    +N spill badge (below, unchanged) rather than drawing
+                    on top of a 4th lane that was never reserved for it.
+                  {%- endcomment -%}
+                  {%- assign fit = "wide" -%}
+                  {%- assign pad = "pl--2 pr--1" -%}
+                  {%- if lane_px < 44 -%}
+                    {%- assign fit = "sliver" -%}
+                    {%- assign pad = "pl--1" -%}
+                  {%- elsif lane_px < 70 -%}
+                    {%- assign fit = "narrow" -%}
+                    {%- assign pad = "pl--1" -%}
+                  {%- endif -%}
 
-                      {%- comment -%} how many events are genuinely active during this one segment? {%- endcomment -%}
-                      {%- assign ovl = 0 -%}
-                      {%- for o in events -%}
-                        {%- unless o.all_day -%}
-                          {%- assign osd = o.start_full | date: "%Y-%m-%d" -%}
-                          {%- if osd == day_key -%}
-                            {%- assign osmin = o.start_full | date: "%H" | plus: 0 | times: 60 -%}
-                            {%- assign osm = o.start_full | date: "%M" | plus: 0 -%}
-                            {%- assign osmin = osmin | plus: osm -%}
-                            {%- assign oemin = o.end_full | date: "%H" | plus: 0 | times: 60 -%}
-                            {%- assign oem = o.end_full | date: "%M" | plus: 0 -%}
-                            {%- assign oemin = oemin | plus: oem -%}
-                            {%- assign oed = o.end_full | date: "%Y-%m-%d" -%}
-                            {%- if oed != osd -%}{%- assign oemin = 1440 -%}{%- endif -%}
-                            {%- if oemin <= osmin -%}{%- assign oemin = osmin | plus: 30 -%}{%- endif -%}
-                            {%- if osmin <= seg_start and oemin > seg_start -%}{%- assign ovl = ovl | plus: 1 -%}{%- endif -%}
-                          {%- endif -%}
-                        {%- endunless -%}
-                      {%- endfor -%}
-                      {%- if ovl < 1 -%}{%- assign ovl = 1 -%}{%- endif -%}
-                      {%- if ovl > 3 -%}{%- assign ovl = 3 -%}{%- endif -%}
-                      {%- assign seg_lane = lane -%}
-                      {%- if seg_lane >= ovl -%}{%- assign seg_lane = ovl | minus: 1 -%}{%- endif -%}
-                      {%- assign lane_w = 100.0 | divided_by: ovl -%}
-                      {%- assign lane_px = col_w | divided_by: ovl -%}
-                      {%- assign left = seg_lane | times: lane_w -%}
-
-                      {%- assign dur = seg_end | minus: seg_start -%}
-                      {%- assign top = seg_start | minus: win_start | times: 100.0 | divided_by: win_span -%}
-                      {%- assign hgt = dur | times: 100.0 | divided_by: win_span -%}
-                      {%- assign px = dur | times: px_per_min -%}
-
-                      {%- assign live = false -%}
-                      {%- if day_key == today and now_min >= seg_start and now_min < seg_end -%}{%- assign live = true -%}{%- endif -%}
-
-                      {%- comment -%} width decides how much of a title is worth printing {%- endcomment -%}
-                      {%- assign fit = "wide" -%}
-                      {%- assign pad = "pl--2 pr--1" -%}
-                      {%- if lane_px < 44 -%}
-                        {%- assign fit = "sliver" -%}
-                        {%- assign pad = "" -%}
-                      {%- elsif lane_px < 70 -%}
-                        {%- assign fit = "narrow" -%}
-                        {%- assign pad = "pl--1" -%}
-                      {%- endif -%}
-
-                      <div class="cw__ev cw__ev--{{ fit }} {{ pad }}{% if live %} cw__ev--live{% endif %}{% if off_event %} cw__ev--off{% endif %}"
-                           style="top:{{ top | round: 3 }}%;height:{{ hgt | round: 3 }}%;left:{{ left | round: 3 }}%;width:{{ lane_w | round: 3 }}%">
-                        <i class="cw__edge{% if tone > 0 %} cw__edge--t{{ tone }}{% endif %}"></i>
-                        {%- comment -%}
-                          only the first segment carries the label -- a
-                          split block otherwise repeats its own title down
-                          the column, which reads as several events, not one
-                        {%- endcomment -%}
-                        {%- unless fit == "sliver" or forloop.index0 > 0 -%}
-                          {%- assign where = "" -%}
-                          {%- if fit == "wide" and px >= 30 and ovl == 1 and e.location and e.location != "" -%}
-                            {%- unless e.location contains "Teams" or e.location contains "Zoom" or e.location contains "http" -%}
-                              {%- assign where = e.location | split: "," | first -%}
-                            {%- endunless -%}
-                          {%- endif -%}
-                          {%- comment -%}
-                            One size for every event label: 12px. The framework's
-                            pixel fonts only come at 12/16/21, so this is one step
-                            down from 16 - it buys roughly twice the characters per
-                            line, which is what narrow and overlapping blocks need.
-                          {%- endcomment -%}
-                          {%- assign clamp = false -%}
-                          {%- if where == "" and px >= 28 -%}{%- assign clamp = true -%}{%- endif -%}
-                          <span class="cw__ev-txt{% if clamp %} cw__ev-txt--clamp{% endif %} text--small">{{ e.summary }}</span>
-                          {%- if where != "" -%}
-                            <span class="cw__ev-where text--small">{{ where }}</span>
-                          {%- endif -%}
-                        {%- endunless -%}
-                      </div>
-                      {%- endif -%}
-                    {%- endunless -%}
-                  {%- endfor -%}
+                  <div class="cw__ev cw__ev--{{ fit }} {{ pad }}{% if live %} cw__ev--live{% endif %}{% if off_event %} cw__ev--off{% endif %}"
+                       style="top:{{ top | round: 3 }}%;height:{{ hgt | round: 3 }}%;left:{{ left | round: 3 }}%;width:{{ lane_w | round: 3 }}%">
+                    <i class="cw__edge{% if tone > 0 %} cw__edge--t{{ tone }}{% endif %}"></i>
+                    {%- comment -%} no time inside the block - the hour gutter carries it {%- endcomment -%}
+                    {%- assign where = "" -%}
+                    {%- if fit == "wide" and px >= 30 and ovl == 1 and e.location and e.location != "" -%}
+                      {%- unless e.location contains "Teams" or e.location contains "Zoom" or e.location contains "http" -%}
+                        {%- assign where = e.location | split: "," | first -%}
+                      {%- endunless -%}
+                    {%- endif -%}
+                    {%- comment -%}
+                      One size for every event label: 12px. The framework's
+                      pixel fonts only come at 12/16/21, so this is one step
+                      down from 16 - it buys roughly twice the characters per
+                      line, which is what narrow and overlapping blocks need.
+                    {%- endcomment -%}
+                    {%- assign clamp = false -%}
+                    {%- if where == "" and fit != "sliver" and px >= 28 -%}{%- assign clamp = true -%}{%- endif -%}
+                    <span class="cw__ev-txt{% if clamp %} cw__ev-txt--clamp{% endif %} text--small">{{ e.summary }}</span>
+                    {%- if where != "" -%}
+                      <span class="cw__ev-where text--small">{{ where }}</span>
+                    {%- endif -%}
+                  </div>
                 {%- endif -%}
 
                 {%- endif -%}
