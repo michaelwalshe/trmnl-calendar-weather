@@ -1070,23 +1070,52 @@
                 {%- endif -%}
 
                 {%- if lane >= 0 -%}
-                  {%- comment -%} how many visible events share this slot? that sets the width {%- endcomment -%}
+                  {%- comment -%}
+                    How wide should this block be? Not "how many events touch
+                    my ENTIRE span" (the old ovl computation) -- that badly
+                    over-counts a long block against several short, mutually
+                    non-overlapping meetings scattered through it (e.g. a
+                    13:00-18:30 placeholder plus two unrelated 30-minute
+                    meetings elsewhere in that span isn't a 3-way clash
+                    anywhere in real time, just two separate 2-way ones, but
+                    the old check counted both regardless and squeezed the
+                    long block down for its whole length even where nothing
+                    else overlapped it at all). Check concurrency at each
+                    visible moment a nearby event starts instead, and keep
+                    the worst one actually reached within my own span: peak
+                    interval overlap always occurs at some interval's start,
+                    so this finds the true peak without a full cluster walk.
+                  {%- endcomment -%}
                   {%- assign ovl = 0 -%}
-                  {%- for o in events -%}
-                    {%- unless o.all_day -%}
-                      {%- assign osd = o.start_full | date: "%Y-%m-%d" -%}
-                      {%- if osd == day_key -%}
-                        {%- assign osmin = o.start_full | date: "%H" | plus: 0 | times: 60 -%}
-                        {%- assign osm = o.start_full | date: "%M" | plus: 0 -%}
-                        {%- assign osmin = osmin | plus: osm -%}
-                        {%- assign oemin = o.end_full | date: "%H" | plus: 0 | times: 60 -%}
-                        {%- assign oem = o.end_full | date: "%M" | plus: 0 -%}
-                        {%- assign oemin = oemin | plus: oem -%}
-                        {%- assign oed = o.end_full | date: "%Y-%m-%d" -%}
-                        {%- if oed != osd -%}{%- assign oemin = 1440 -%}{%- endif -%}
-                        {%- if oemin <= osmin -%}{%- assign oemin = osmin | plus: 30 -%}{%- endif -%}
-                        {%- if oemin > win_start and osmin < win_end -%}
-                          {%- if osmin < emin and oemin > smin -%}{%- assign ovl = ovl | plus: 1 -%}{%- endif -%}
+                  {%- for cp in events -%}
+                    {%- unless cp.all_day -%}
+                      {%- assign cpsd = cp.start_full | date: "%Y-%m-%d" -%}
+                      {%- if cpsd == day_key -%}
+                        {%- assign cpsmin = cp.start_full | date: "%H" | plus: 0 | times: 60 -%}
+                        {%- assign cpsm = cp.start_full | date: "%M" | plus: 0 -%}
+                        {%- assign cpsmin = cpsmin | plus: cpsm -%}
+                        {%- if cpsmin >= win_start and cpsmin < win_end and cpsmin >= smin and cpsmin < emin -%}
+                          {%- assign concurrent = 0 -%}
+                          {%- for o in events -%}
+                            {%- unless o.all_day -%}
+                              {%- assign osd = o.start_full | date: "%Y-%m-%d" -%}
+                              {%- if osd == day_key -%}
+                                {%- assign osmin = o.start_full | date: "%H" | plus: 0 | times: 60 -%}
+                                {%- assign osm = o.start_full | date: "%M" | plus: 0 -%}
+                                {%- assign osmin = osmin | plus: osm -%}
+                                {%- assign oemin = o.end_full | date: "%H" | plus: 0 | times: 60 -%}
+                                {%- assign oem = o.end_full | date: "%M" | plus: 0 -%}
+                                {%- assign oemin = oemin | plus: oem -%}
+                                {%- assign oed = o.end_full | date: "%Y-%m-%d" -%}
+                                {%- if oed != osd -%}{%- assign oemin = 1440 -%}{%- endif -%}
+                                {%- if oemin <= osmin -%}{%- assign oemin = osmin | plus: 30 -%}{%- endif -%}
+                                {%- if oemin > win_start and osmin < win_end -%}
+                                  {%- if osmin <= cpsmin and oemin > cpsmin -%}{%- assign concurrent = concurrent | plus: 1 -%}{%- endif -%}
+                                {%- endif -%}
+                              {%- endif -%}
+                            {%- endunless -%}
+                          {%- endfor -%}
+                          {%- if concurrent > ovl -%}{%- assign ovl = concurrent -%}{%- endif -%}
                         {%- endif -%}
                       {%- endif -%}
                     {%- endunless -%}
